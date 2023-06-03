@@ -9,7 +9,7 @@ on:
 
 jobs:
   release:
-    uses: gravitl/devops/.github/workflows/UIRelease.yml@master
+    uses: TKaxv-7S/devops/.github/workflows/UIRelease.yml@main_tk
     with:
       version: ${{ inputs.version }}
     secrets: inherit
