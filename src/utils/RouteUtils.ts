@@ -88,7 +88,7 @@ export function getNetclientDownloadLink(
   }
   effectiveFileName += `-${platform}-${arch}`;
 
-  if (platform === 'windows') effectiveFileName = 'netclient_x86.msi';
+  if (platform === 'windows') effectiveFileName = 'netclient-windows-amd64.exe';
   else if (platform === 'darwin') {
     if (arch === 'amd64') effectiveFileName = 'Netclient-Intel.pkg';
     else if (arch === 'arm64') effectiveFileName = 'Netclient-M1.pkg';
