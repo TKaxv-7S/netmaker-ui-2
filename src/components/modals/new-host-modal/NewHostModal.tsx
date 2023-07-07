@@ -300,6 +300,11 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                   <>
                     <Row>
                       <Col xs={24} style={{ textAlign: 'center' }}>
+                        <h4 style={{ marginBottom: '.5rem' }}>Install with this command</h4>
+                        <Typography.Text code copyable>
+                          {`netclient-windows-amd64.exe install`}
+                        </Typography.Text>
+                        <Divider />
                         <Button
                           type="primary"
                           href={getNetclientDownloadLink('windows', 'amd64')[0]}
