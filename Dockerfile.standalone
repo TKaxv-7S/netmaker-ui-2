@@ -17,11 +17,10 @@ LABEL \
 WORKDIR /usr/app
 COPY . /usr/app
 
+RUN apk add --no-cache jq
+
 # Switch for SaaS or Standalone build
 ENV VITE_IS_SAAS_BUILD=false
-
-
-# Essential vars
 
 
 # Standalone build mandatory vars
@@ -31,12 +30,17 @@ ENV VITE_IS_SAAS_BUILD=false
 ENV VITE_BASE_URL=
 
 ENV VITE_LICENSE_DASHBOARD_URL=https://account.netmaker.io
+ENV VITE_NETMAKER_SUPPORT_EMAIL=help@netmaker.io
 
-
-# EE customisations
-
-ENV VITE_TENANT_LOGO=
-ENV VITE_TENANT_NAME=
+# EE customisations and branding
+ENV VITE_PRODUCT_NAME=
+ENV VITE_TENANT_LOGO_DARK_URL=
+ENV VITE_TENANT_LOGO_LIGHT_URL=
+ENV VITE_TENANT_LOGO_DARK_SMALL_URL=
+ENV VITE_TENANT_LOGO_LIGHT_SMALL_URL=
+ENV VITE_TENANT_LOGO_ALT_TEXT=
+ENV VITE_TENANT_FAVICON_LOGO=
+ENV VITE_TENANT_PRIMARY_COLOR=
 
 
 # Other vars

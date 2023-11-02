@@ -3,16 +3,18 @@ import { AuthService } from '@/services/AuthService';
 import { LoginDto } from '@/services/dtos/LoginDto';
 import { useStore } from '@/store/store';
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Col, Divider, Form, Input, Layout, notification, Row, Typography } from 'antd';
+import { Button, Checkbox, Col, Divider, Form, Image, Input, Layout, notification, Row, Typography } from 'antd';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AMUI_URL, isSaasBuild } from '../../services/BaseService';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { UsersService } from '@/services/UsersService';
 import { User } from '@/models/User';
 import { ApiRoutes } from '@/constants/ApiRoutes';
-import { truncateQueryParamsFromCurrentUrl, useQuery } from '@/utils/RouteUtils';
+import { resolveAppRoute, truncateQueryParamsFromCurrentUrl, useQuery } from '@/utils/RouteUtils';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { useBranding } from '@/utils/Utils';
 
 interface LoginPageProps {
   isFullScreen?: boolean;
@@ -22,10 +24,14 @@ export default function LoginPage(props: LoginPageProps) {
   const [form] = Form.useForm<LoginDto>();
   const [notify, notifyCtx] = notification.useNotification();
   const store = useStore();
+  const storeFetchServerConfig = store.fetchServerConfig;
   const navigate = useNavigate();
   const { backend, token } = useParams();
   const { t } = useTranslation();
   const query = useQuery();
+  const location = useLocation();
+  const currentTheme = store.currentTheme;
+  const branding = useBranding();
 
   const oauthToken = query.get('login');
   const oauthUser = query.get('user');
@@ -35,6 +41,11 @@ export default function LoginPage(props: LoginPageProps) {
   const getUserAndUpdateInStore = async (username: User['username']) => {
     try {
       const user = await (await UsersService.getUser(username)).data;
+
+      if (!user?.issuperadmin && !user?.isadmin) {
+        notify.error({ message: 'Failed to login', description: 'User is not an admin' });
+        return;
+      }
       store.setStore({ user });
     } catch (err) {
       notify.error({ message: 'Failed to get user details', description: extractErrorMsg(err as any) });
@@ -47,8 +58,8 @@ export default function LoginPage(props: LoginPageProps) {
       setIsLoading(true);
       const data = await (await AuthService.login(formData)).data;
       store.setStore({ jwt: data.Response.AuthToken, username: data.Response.UserName });
+      await storeFetchServerConfig();
       await getUserAndUpdateInStore(data.Response.UserName);
-      // navigate(AppRoutes.DASHBOARD_ROUTE);
     } catch (err) {
       notify.error({ message: 'Failed to login', description: extractErrorMsg(err as any) });
     } finally {
@@ -58,7 +69,7 @@ export default function LoginPage(props: LoginPageProps) {
 
   const checkIfServerHasAdminAndRedirect = useCallback(async () => {
     const hasAdmin = (await UsersService.serverHasAdmin()).data;
-    if (!hasAdmin) navigate(AppRoutes.SIGNUP_ROUTE);
+    if (!hasAdmin) navigate(resolveAppRoute(AppRoutes.SIGNUP_ROUTE));
   }, [navigate]);
 
   const onSSOLogin = useCallback(() => {
@@ -83,7 +94,7 @@ export default function LoginPage(props: LoginPageProps) {
     store.setStore({ jwt: token, baseUrl: backend });
     truncateQueryParamsFromCurrentUrl();
     // TODO: load username
-    navigate(AppRoutes.DASHBOARD_ROUTE);
+    navigate(resolveAppRoute(AppRoutes.DASHBOARD_ROUTE));
     return null;
   } else {
     if (oauthToken) {
@@ -92,87 +103,104 @@ export default function LoginPage(props: LoginPageProps) {
         getUserAndUpdateInStore(oauthUser);
       }
       truncateQueryParamsFromCurrentUrl();
-      navigate(AppRoutes.DASHBOARD_ROUTE);
+      navigate(resolveAppRoute(AppRoutes.DASHBOARD_ROUTE));
       return null;
     }
   }
 
   if (store.isLoggedIn()) {
-    navigate(AppRoutes.DASHBOARD_ROUTE);
+    navigate(resolveAppRoute(AppRoutes.DASHBOARD_ROUTE));
   }
 
   return (
-    <Layout style={{ height: '100%', minHeight: '100vh', justifyContent: 'center', alignItems: 'center' }}>
-      <Layout.Content
-        style={{
-          marginTop: '15vh',
-          position: 'relative',
-          height: 'fit-content',
-          width: '40%',
-          padding: props.isFullScreen ? 0 : 24,
-        }}
-      >
-        <Row>
-          <Col xs={24}>
-            <Typography.Title level={2}>{t('signin.signin')}</Typography.Title>
-          </Col>
-        </Row>
-
-        <Form
-          form={form}
-          layout="vertical"
-          onKeyUp={(ev) => {
-            if (ev.key === 'Enter') {
-              onLogin();
-            }
+    <AppErrorBoundary key={location.pathname}>
+      <Layout style={{ height: '100%', minHeight: '100vh', justifyContent: 'center', alignItems: 'center' }}>
+        <Layout.Content
+          style={{
+            marginTop: '15vh',
+            position: 'relative',
+            height: 'fit-content',
+            width: '40%',
+            padding: props.isFullScreen ? 0 : 24,
           }}
         >
-          <Form.Item name="username" label={t('signin.username')} rules={[{ required: true }]}>
-            <Input placeholder={String(t('signin.username'))} size="large" prefix={<MailOutlined />} />
-          </Form.Item>
-          <Form.Item name="password" label={t('signin.password')} rules={[{ required: true }]}>
-            <Input placeholder={String(t('signin.password'))} type="password" size="large" prefix={<LockOutlined />} />
-          </Form.Item>
-
-          <Row style={{ marginBottom: '1.5rem' }}>
-            <Col>
-              <Checkbox checked={shouldRemember} onChange={(e) => setShouldRemember(e.target.checked)}>
-                {' '}
-                <Typography.Text>{t('signin.rememberme')}</Typography.Text>
-              </Checkbox>
+          <Row>
+            <Col xs={24} style={{ textAlign: 'center' }}>
+              <Image
+                preview={false}
+                width="200px"
+                src={currentTheme === 'dark' ? branding.logoDarkUrl : branding.logoLightUrl}
+              />
             </Col>
           </Row>
 
-          <Typography.Text>
-            {t('signin.terms1')} {/* eslint-disable-next-line react/jsx-no-target-blank */}
-            <a href="https://www.netmaker.io/terms-and-conditions" target="_blank">
-              {t('signin.terms2')}
-            </a>{' '}
-            {t('signin.terms3')} {/* eslint-disable-next-line react/jsx-no-target-blank */}
-            <a href="https://www.netmaker.io/privacy-policy" target="_blank">
-              {t('signin.terms4')}
-            </a>
-            .
-          </Typography.Text>
+          <Row style={{ marginTop: '4rem' }}>
+            <Col xs={24}>
+              <Typography.Title level={2}>{t('signin.signin')}</Typography.Title>
+            </Col>
+          </Row>
 
-          <Form.Item style={{ marginTop: '1.5rem' }}>
-            <Button type="primary" block onClick={onLogin} loading={isLoading}>
-              {t('signin.signin')}
-            </Button>
-          </Form.Item>
-          <Divider>
-            <Typography.Text>{t('signin.or')}</Typography.Text>
-          </Divider>
-          <Form.Item style={{ marginTop: '1.5rem' }}>
-            <Button type="default" block onClick={onSSOLogin} loading={isLoading}>
-              {t('signin.sso')}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Layout.Content>
+          <Form
+            form={form}
+            layout="vertical"
+            onKeyUp={(ev) => {
+              if (ev.key === 'Enter') {
+                onLogin();
+              }
+            }}
+          >
+            <Form.Item name="username" label={t('signin.username')} rules={[{ required: true }]}>
+              <Input placeholder={String(t('signin.username'))} size="large" prefix={<MailOutlined />} />
+            </Form.Item>
+            <Form.Item name="password" label={t('signin.password')} rules={[{ required: true }]}>
+              <Input
+                placeholder={String(t('signin.password'))}
+                type="password"
+                size="large"
+                prefix={<LockOutlined />}
+              />
+            </Form.Item>
 
-      {/* misc */}
-      {notifyCtx}
-    </Layout>
+            <Row style={{ marginBottom: '1.5rem' }}>
+              <Col>
+                <Checkbox checked={shouldRemember} onChange={(e) => setShouldRemember(e.target.checked)}>
+                  {' '}
+                  <Typography.Text>{t('signin.rememberme')}</Typography.Text>
+                </Checkbox>
+              </Col>
+            </Row>
+
+            <Typography.Text>
+              {t('signin.terms1')} {/* eslint-disable-next-line react/jsx-no-target-blank */}
+              <a href="https://www.netmaker.io/terms-and-conditions" target="_blank">
+                {t('signin.terms2')}
+              </a>{' '}
+              {t('signin.terms3')} {/* eslint-disable-next-line react/jsx-no-target-blank */}
+              <a href="https://www.netmaker.io/privacy-policy" target="_blank">
+                {t('signin.terms4')}
+              </a>
+              .
+            </Typography.Text>
+
+            <Form.Item style={{ marginTop: '1.5rem' }}>
+              <Button type="primary" block onClick={onLogin} loading={isLoading}>
+                {t('signin.signin')}
+              </Button>
+            </Form.Item>
+            <Divider>
+              <Typography.Text>{t('signin.or')}</Typography.Text>
+            </Divider>
+            <Form.Item style={{ marginTop: '1.5rem' }}>
+              <Button type="default" block onClick={onSSOLogin} loading={isLoading}>
+                {t('signin.sso')}
+              </Button>
+            </Form.Item>
+          </Form>
+        </Layout.Content>
+
+        {/* misc */}
+        {notifyCtx}
+      </Layout>
+    </AppErrorBoundary>
   );
 }

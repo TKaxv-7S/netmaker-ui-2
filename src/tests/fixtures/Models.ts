@@ -1,3 +1,4 @@
+import { NodeAcl, NodeAclContainer } from '@/models/Acl';
 import { Host } from '@/models/Host';
 import { Network } from '@/models/Network';
 import { Node } from '@/models/Node';
@@ -14,19 +15,17 @@ export const stubHost1: Host = {
   isstatic: false,
   listenport: 0,
   localrange: '',
-  locallistenport: 0,
-  proxy_listen_port: 0,
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
   publickey: '',
   macaddress: '',
-  internetgateway: '',
   nodes: [],
-  proxy_enabled: false,
   isdefault: false,
   nat_type: 'public',
+  persistentkeepalive: 0,
+  autoupdate: false,
 };
 
 export const stubHost2: Host = {
@@ -40,19 +39,17 @@ export const stubHost2: Host = {
   isstatic: false,
   listenport: 0,
   localrange: '',
-  locallistenport: 0,
-  proxy_listen_port: 0,
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
   publickey: '',
   macaddress: '',
-  internetgateway: '',
   nodes: [],
-  proxy_enabled: false,
   isdefault: false,
   nat_type: 'asymmetric',
+  persistentkeepalive: 0,
+  autoupdate: false,
 };
 
 export const stubHosts: Host[] = [stubHost1, stubHost2];
@@ -111,7 +108,6 @@ export const stubNode1: Node = {
   address: '',
   address6: '',
   localaddress: '',
-  persistentkeepalive: 0,
   interface: '',
   macaddress: '',
   lastmodified: 0,
@@ -136,6 +132,7 @@ export const stubNode1: Node = {
   connected: false,
   failover: false,
   relayedby: '',
+  autoupdate: false,
 };
 
 export const stubNode2: Node = {
@@ -144,7 +141,6 @@ export const stubNode2: Node = {
   address: '',
   address6: '',
   localaddress: '',
-  persistentkeepalive: 0,
   interface: '',
   macaddress: '',
   lastmodified: 0,
@@ -169,6 +165,7 @@ export const stubNode2: Node = {
   connected: false,
   failover: false,
   relayedby: '',
+  autoupdate: false,
 };
 
 export const stubNodes: Node[] = [stubNode1, stubNode2];
@@ -176,15 +173,24 @@ export const stubNodes: Node[] = [stubNode1, stubNode2];
 export const stubUser1: User = {
   username: 'user-1',
   isadmin: true,
-  networks: [],
-  groups: ['*'],
+  issuperadmin: false,
+  remote_gw_ids: null,
 };
 
 export const stubUser2: User = {
   username: 'user-2',
   isadmin: false,
-  networks: null,
-  groups: null,
+  issuperadmin: false,
+  remote_gw_ids: null,
 };
 
 export const stubUsers: User[] = [stubUser1, stubUser2];
+
+export const stubAclData: NodeAclContainer = {};
+for (let i = 1; i <= 50; i++) {
+  const nodeAcl: NodeAcl = {};
+  for (let j = 1; j <= 50; j++) {
+    nodeAcl[`node-${j}`] = 2;
+  }
+  stubAclData[`node-${i}`] = nodeAcl;
+}

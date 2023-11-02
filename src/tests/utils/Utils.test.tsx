@@ -1,7 +1,15 @@
 import { Host } from '@/models/Host';
+import { MetricCategories, UptimeNodeMetrics } from '@/models/Metrics';
 import { Node } from '@/models/Node';
 import { isHostNatted } from '@/utils/NodeUtils';
-import { getHostHealth, getTimeMinHrs, renderNodeHealth } from '@/utils/Utils';
+import {
+  getFormattedData,
+  getFormattedTime,
+  getHostHealth,
+  getTimeMinHrs,
+  renderMetricValue,
+  renderNodeHealth,
+} from '@/utils/Utils';
 import { cleanup, render, screen } from '@testing-library/react';
 
 const testNode1: Node = {
@@ -10,7 +18,6 @@ const testNode1: Node = {
   address: '',
   address6: '',
   localaddress: '',
-  persistentkeepalive: 0,
   interface: '',
   macaddress: '',
   lastmodified: 0,
@@ -36,6 +43,7 @@ const testNode1: Node = {
   failover: false,
   relayedby: '',
   relaynodes: [],
+  autoupdate: false,
 };
 
 const testNode2 = { ...testNode1, lastcheckin: testNode1.lastcheckin - 400 };
@@ -51,19 +59,17 @@ const testHost1: Host = {
   isstatic: false,
   listenport: 0,
   localrange: '',
-  locallistenport: 0,
-  proxy_listen_port: 0,
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
   publickey: '',
   macaddress: '',
-  internetgateway: '',
   nodes: [],
-  proxy_enabled: false,
   isdefault: false,
   nat_type: '',
+  persistentkeepalive: 0,
+  autoupdate: false,
 };
 
 const testHost2: Host = { ...testHost1, nat_type: 'public' };
@@ -113,5 +119,78 @@ describe('Utils', () => {
     expect(isHostNatted(testHost1)).toEqual(false);
     expect(isHostNatted(testHost2)).toEqual(false);
     expect(isHostNatted(testHost3)).toEqual(true);
+  });
+
+  it('gets formatted data', () => {
+    const kb1 = 1000;
+    const mb1 = 1000 * kb1;
+    const gb1 = 1000 * mb1;
+    const gb2 = 2 * gb1;
+
+    expect(getFormattedData(kb1)).toEqual('1000.00 (B)');
+    expect(getFormattedData(mb1)).toEqual('1000.00 (KiB)');
+    expect(getFormattedData(gb1)).toEqual('1000.00 (MiB)');
+    expect(getFormattedData(gb2)).toEqual('2.00 (GiB)');
+  });
+
+  it('gets formatted time', () => {
+    const sec0 = 0;
+    const sec1 = 1_000_000_000;
+    const min1 = 60 * sec1;
+    const hour1 = 60 * min1;
+    const day1 = 24 * hour1;
+
+    expect(getFormattedTime(sec0)).toEqual('0h0m');
+    expect(getFormattedTime(sec1)).toEqual('0h1m');
+    expect(getFormattedTime(min1)).toEqual('0h1m');
+    expect(getFormattedTime(hour1)).toEqual('1h0m');
+    expect(getFormattedTime(day1)).toEqual('24h0m');
+  });
+
+  describe('renderMetricValue', () => {
+    it('should show latency metric', () => {
+      const metricType: MetricCategories = 'latency';
+      const value = 50;
+      const result = renderMetricValue(metricType, value);
+      const screen = render(<>{result}</>);
+      expect(screen.queryByTestId(`latency-metric-${value}`)).toBeInTheDocument();
+    });
+
+    it('should show connectivity metric', () => {
+      const metricType: MetricCategories = 'connectivity-status';
+      const value = true;
+      const result = renderMetricValue(metricType, value);
+      const screen = render(<>{result}</>);
+      expect(screen.queryByTestId(`connectivity-metric-${value}`)).toBeInTheDocument();
+    });
+
+    it('should show data tx metric', () => {
+      let metricType: MetricCategories = 'bytes-received';
+      let value = 50;
+      let result = renderMetricValue(metricType, value);
+      let screen = render(<>{result}</>);
+      expect(screen.queryByTestId(`bytes-received-metric-${value}`)).toBeInTheDocument();
+      cleanup();
+
+      metricType = 'bytes-sent';
+      value = 200;
+      result = renderMetricValue(metricType, value);
+      screen = render(<>{result}</>);
+      expect(screen.queryByTestId(`bytes-sent-metric-${value}`)).toBeInTheDocument();
+      cleanup();
+    });
+
+    it('should show uptime metric', () => {
+      const metricType: MetricCategories = 'uptime';
+      const value: UptimeNodeMetrics = {
+        fractionalUptime: 0,
+        uptime: 0,
+        totalFractionalUptime: 0,
+        uptimePercent: 0,
+      };
+      const result = renderMetricValue(metricType, value);
+      const screen = render(<>{result}</>);
+      expect(screen.queryByTestId(`uptime-metric-${JSON.stringify(value)}`)).toBeInTheDocument();
+    });
   });
 });

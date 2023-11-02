@@ -5,14 +5,16 @@ import { HostsService } from '@/services/HostsService';
 import { useStore } from '@/store/store';
 import { getNodeConnectivityStatus } from '@/utils/NodeUtils';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
-import { ExclamationCircleFilled, SettingOutlined } from '@ant-design/icons';
+import { ExclamationCircleFilled, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Col,
   Collapse,
   Dropdown,
+  Form,
   Input,
   Layout,
   Modal,
@@ -31,13 +33,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PageProps } from '../../models/Page';
 import './NetworkHostDetailsPage.scss';
-import { getNetworkRoute, useQuery } from '@/utils/RouteUtils';
+import { getHostRoute, getNetworkRoute, resolveAppRoute, useQuery } from '@/utils/RouteUtils';
 import { Node } from '@/models/Node';
 import { NodeConnectivityStatus } from '@/models/NodeConnectivityStatus';
-import moment from 'moment';
 import { DATE_TIME_FORMAT } from '@/constants/AppConstants';
 import UpdateNodeModal from '@/components/modals/update-node-modal/UpdateNodeModal';
 import { NodesService } from '@/services/NodesService';
+import dayjs from 'dayjs';
 
 export default function NetworkHostDetailsPage(props: PageProps) {
   const { hostId, networkId } = useParams<{ hostId: string; networkId: string }>();
@@ -47,7 +49,6 @@ export default function NetworkHostDetailsPage(props: PageProps) {
   const { token: themeToken } = theme.useToken();
   const queryParams = useQuery();
 
-  // const storeUpdateHost = store.updateHost;
   const storeDeleteNode = store.deleteNode;
   const [isLoading, setIsLoading] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
@@ -75,34 +76,12 @@ export default function NetworkHostDetailsPage(props: PageProps) {
         dataIndex: 'addressString',
       },
     ],
-    [host?.defaultinterface]
+    [host?.defaultinterface],
   );
 
   const onUpdateNode = useCallback(() => {
     setIsEditingNode(false);
   }, []);
-
-  // const toggleProxyStatus = useCallback(
-  //   (newStatus: boolean) => {
-  //     Modal.confirm({
-  //       title: 'Toggle proxy status',
-  //       content: `Are you sure you want to turn ${newStatus ? 'on' : 'off'} proxy for this host?`,
-  //       onOk: async () => {
-  //         try {
-  //           if (!hostId || !host) return;
-  //           const newHost = (await HostsService.updateHost(hostId, { ...host, proxy_enabled: newStatus })).data;
-  //           storeUpdateHost(hostId, newHost);
-  //         } catch (err) {
-  //           notify.error({
-  //             message: 'Failed to update host',
-  //             description: extractErrorMsg(err as any),
-  //           });
-  //         }
-  //       },
-  //     });
-  //   },
-  //   [hostId, host, storeUpdateHost, notify]
-  // );
 
   const getHostHealth = useCallback(() => {
     const nodeHealth: NodeConnectivityStatus = node ? getNodeConnectivityStatus(node) : 'unknown';
@@ -122,7 +101,7 @@ export default function NetworkHostDetailsPage(props: PageProps) {
   const loadDetails = useCallback(() => {
     setIsLoading(true);
     if (!networkId) {
-      navigate(AppRoutes.NETWORKS_ROUTE);
+      navigate(resolveAppRoute(AppRoutes.NETWORKS_ROUTE));
       return;
     }
     if (!hostId) {
@@ -143,29 +122,91 @@ export default function NetworkHostDetailsPage(props: PageProps) {
     setIsLoading(false);
   }, [networkId, hostId, store.hosts, store.nodes, navigate, notify]);
 
-  const onHostRemove = useCallback(async () => {
-    try {
-      if (!hostId || !node || !networkId) {
-        throw new Error('Host or network not found');
+  const onHostRemove = useCallback(
+    async (forceDelete: boolean) => {
+      try {
+        if (!hostId || !node || !networkId) {
+          throw new Error('Host or network not found');
+        }
+        await NodesService.deleteNode(node?.id, networkId, forceDelete);
+        if (forceDelete) {
+          storeDeleteNode(node.id);
+        }
+        notify.success({ message: `Host ${hostId} deleted` });
+        navigate(getNetworkRoute(networkId));
+      } catch (err) {
+        notify.error({
+          message: 'Failed to delete host from network',
+          description: extractErrorMsg(err as any),
+        });
       }
-      await NodesService.deleteNode(node?.id, networkId);
-      notify.success({ message: `Host ${hostId} deleted` });
-      storeDeleteNode(node.id);
-      navigate(getNetworkRoute(networkId));
-    } catch (err) {
-      notify.error({
-        message: 'Failed to delete host from network',
-        description: extractErrorMsg(err as any),
-      });
-    }
-  }, [hostId, node, networkId, notify, storeDeleteNode, navigate]);
+    },
+    [hostId, node, networkId, notify, storeDeleteNode, navigate],
+  );
 
-  const promptConfirmRemove = () => {
+  const onHostToggleConnectivity = useCallback(
+    async (newStatus: boolean) => {
+      try {
+        if (!hostId || !node || !networkId) {
+          throw new Error('Host or network not found');
+        }
+        const updatedNode = (await NodesService.updateNode(node.id, networkId, { ...node, connected: newStatus })).data;
+        store.updateNode(node.id, updatedNode);
+        notify.success({
+          message: `Successfully ${newStatus ? 'connected' : 'disconnected'}`,
+          description: `Host is now ${newStatus ? 'connected to' : 'disconnected from'} network ${networkId}.`,
+        });
+      } catch (err) {
+        notify.error({
+          message: `Failed to ${newStatus ? 'connect' : 'disconnect'} host ${newStatus ? 'to' : 'from'} network`,
+          description: extractErrorMsg(err as any),
+        });
+      }
+    },
+    [hostId, node, networkId, notify, store],
+  );
+
+  const promptConfirmDisconnect = () => {
     Modal.confirm({
-      title: `Do you want to remove host ${host?.name} from network ${networkId}?`,
+      title: `Do you want to ${node?.connected ? 'disconnect' : 'connect'} host ${host?.name} ${
+        node?.connected ? 'from' : 'to'
+      } network ${networkId}?`,
       icon: <ExclamationCircleFilled />,
       onOk() {
-        onHostRemove();
+        onHostToggleConnectivity(!node?.connected);
+      },
+    });
+  };
+
+  const promptConfirmRemove = () => {
+    let forceDelete = false;
+
+    Modal.confirm({
+      title: `Do you want to remove host ${host?.name} from network ${networkId}?`,
+      content: (
+        <>
+          <Row>
+            <Col xs={24}>
+              <Form.Item
+                htmlFor="force-delete"
+                label="Force delete"
+                valuePropName="checked"
+                style={{ marginBottom: '0px' }}
+              >
+                <Checkbox
+                  id="force-delete"
+                  onChange={(e) => {
+                    forceDelete = e.target.checked;
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </>
+      ),
+      icon: <ExclamationCircleFilled />,
+      onOk() {
+        onHostRemove(forceDelete);
       },
     });
   };
@@ -211,7 +252,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             Network settings
           </Typography.Title>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_network"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Network</Typography.Text>
             </Col>
@@ -220,7 +264,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             </Col>
           </Row>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_address"
+          >
             <Col xs={12}>
               <Typography.Text disabled>IP Address (IPv4)</Typography.Text>
             </Col>
@@ -230,7 +277,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
           </Row>
 
           {network && network.isipv6 && (
-            <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+            <Row
+              style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+              data-nmui-intercom="network-host-details_address6"
+            >
               <Col xs={12}>
                 <Typography.Text disabled>IP Address (IPv6)</Typography.Text>
               </Col>
@@ -240,7 +290,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             </Row>
           )}
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_localaddress"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Local Address</Typography.Text>
             </Col>
@@ -250,7 +303,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
           </Row>
 
           {node?.isegressgateway && (
-            <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+            <Row
+              style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+              data-nmui-intercom="network-host-details_egressgatewayranges"
+            >
               <Col xs={12}>
                 <Typography.Text disabled>Egress Gateway Ranges</Typography.Text>
               </Col>
@@ -260,7 +316,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             </Row>
           )}
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_connected"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Is Connected</Typography.Text>
             </Col>
@@ -269,16 +328,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             </Col>
           </Row>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
-            <Col xs={12}>
-              <Typography.Text disabled>Persistent Keepalive</Typography.Text>
-            </Col>
-            <Col xs={12}>
-              <Typography.Text>{node?.persistentkeepalive ?? ''}</Typography.Text>
-            </Col>
-          </Row>
-
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_defaultacl"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Default ACL</Typography.Text>
             </Col>
@@ -287,7 +340,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             </Col>
           </Row>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_dnson"
+          >
             <Col xs={12}>
               <Typography.Text disabled>DNS On</Typography.Text>
             </Col>
@@ -296,35 +352,40 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             </Col>
           </Row>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_lastcheckin"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Last Check-in Time</Typography.Text>
             </Col>
             <Col xs={12}>
-              <Typography.Text>
-                {moment((node?.lastcheckin ?? 0) * 1000).format(DATE_TIME_FORMAT) ?? ''}
-              </Typography.Text>
+              <Typography.Text>{dayjs((node?.lastcheckin ?? 0) * 1000).format(DATE_TIME_FORMAT) ?? ''}</Typography.Text>
             </Col>
           </Row>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_expdatetime"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Expiration Date</Typography.Text>
             </Col>
             <Col xs={12}>
-              <Typography.Text>
-                {moment((node?.expdatetime ?? 0) * 1000).format(DATE_TIME_FORMAT) ?? ''}
-              </Typography.Text>
+              <Typography.Text>{dayjs((node?.expdatetime ?? 0) * 1000).format(DATE_TIME_FORMAT) ?? ''}</Typography.Text>
             </Col>
           </Row>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_lastmodified"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Last Modified Time</Typography.Text>
             </Col>
             <Col xs={12}>
               <Typography.Text>
-                {moment((node?.lastmodified ?? 0) * 1000).format(DATE_TIME_FORMAT) ?? ''}
+                {dayjs((node?.lastmodified ?? 0) * 1000).format(DATE_TIME_FORMAT) ?? ''}
               </Typography.Text>
             </Col>
           </Row>
@@ -340,7 +401,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                 </Typography.Title>
               }
             >
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostid"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>ID</Typography.Text>
                 </Col>
@@ -348,7 +412,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.id}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostendpoint"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Endpoint</Typography.Text>
                 </Col>
@@ -356,7 +423,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.endpointip}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostlistenport"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Listen Port</Typography.Text>
                 </Col>
@@ -364,7 +434,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.listenport}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostmacaddress"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>MAC Address</Typography.Text>
                 </Col>
@@ -372,7 +445,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.macaddress}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostmtu"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>MTU</Typography.Text>
                 </Col>
@@ -380,7 +456,21 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.mtu}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostpersistentkeepalive"
+              >
+                <Col xs={12}>
+                  <Typography.Text disabled>Persistent Keepalive</Typography.Text>
+                </Col>
+                <Col xs={12}>
+                  <Typography.Text>{host.persistentkeepalive}</Typography.Text>
+                </Col>
+              </Row>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostpublickey"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Public Key</Typography.Text>
                 </Col>
@@ -388,7 +478,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.publickey}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostos"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Operating System</Typography.Text>
                 </Col>
@@ -396,7 +489,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.os}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostversion"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Version</Typography.Text>
                 </Col>
@@ -404,7 +500,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.version}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostverbosity"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Verbosity</Typography.Text>
                 </Col>
@@ -412,7 +511,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.verbosity}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostdefaultinterface"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Default Interface</Typography.Text>
                 </Col>
@@ -420,7 +522,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.defaultinterface}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostisdefault"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Default Host</Typography.Text>
                 </Col>
@@ -428,7 +533,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.isdefault ? 'Yes' : 'No'}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostisstatic"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Static Endpoint</Typography.Text>
                 </Col>
@@ -436,7 +544,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.isstatic ? 'Yes' : 'No'}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostdebug"
+              >
                 <Col xs={12}>
                   <Typography.Text disabled>Debug</Typography.Text>
                 </Col>
@@ -444,30 +555,15 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                   <Typography.Text>{host.debug ? 'Yes' : 'No'}</Typography.Text>
                 </Col>
               </Row>
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_autoupdate"
+              >
                 <Col xs={12}>
-                  <Typography.Text disabled>Internet Gateway</Typography.Text>
+                  <Typography.Text disabled>Auto Update</Typography.Text>
                 </Col>
                 <Col xs={12}>
-                  <Typography.Text>{host.internetgateway}</Typography.Text>
-                </Col>
-              </Row>
-
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
-                <Col xs={12}>
-                  <Typography.Text disabled>Proxy Enabled</Typography.Text>
-                </Col>
-                <Col xs={12}>
-                  <Typography.Text>{host.proxy_enabled ? 'Yes' : 'No'}</Typography.Text>
-                </Col>
-              </Row>
-
-              <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
-                <Col xs={12}>
-                  <Typography.Text disabled>Proxy Listen Port</Typography.Text>
-                </Col>
-                <Col xs={12}>
-                  <Typography.Text>{host.listenport}</Typography.Text>
+                  <Typography.Text>{host.autoupdate ? 'Yes' : 'No'}</Typography.Text>
                 </Col>
               </Row>
             </Collapse.Panel>
@@ -487,6 +583,7 @@ export default function NetworkHostDetailsPage(props: PageProps) {
               placeholder="Search interfaces"
               value={searchText}
               onChange={(ev) => setSearchText(ev.target.value)}
+              prefix={<SearchOutlined />}
             />
           </Col>
         </Row>
@@ -495,10 +592,10 @@ export default function NetworkHostDetailsPage(props: PageProps) {
             <Table
               columns={interfacesTableCols}
               dataSource={
-                host?.interfaces.filter((iface) =>
+                host?.interfaces?.filter((iface) =>
                   `${iface.name}${iface.addressString}`
                     .toLocaleLowerCase()
-                    .includes(searchText.toLocaleLowerCase().trim())
+                    .includes(searchText.toLocaleLowerCase().trim()),
                 ) ?? []
               }
               rowKey={(iface) => `${iface.name}${iface.addressString}`}
@@ -560,10 +657,6 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                 </Typography.Title>
               </Col>
               <Col xs={6} style={{ textAlign: 'right' }}>
-                {/* <span style={{ marginRight: '2rem' }}>
-                  <Typography.Text style={{ marginRight: '1rem' }}>Proxy Status</Typography.Text>
-                  <Switch checked={host?.proxy_enabled} onChange={toggleProxyStatus} />
-                </span> */}
                 <Dropdown
                   placement="bottomRight"
                   menu={{
@@ -586,6 +679,26 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                         onClick: (ev) => {
                           ev.domEvent.stopPropagation();
                           setIsEditingNode(true);
+                        },
+                      },
+                      {
+                        key: 'global-hpst',
+                        label: 'View Global Host',
+                        onClick: (ev) => {
+                          ev.domEvent.stopPropagation();
+                          navigate(getHostRoute(hostId ?? ''));
+                        },
+                      },
+                      {
+                        key: 'disconnect',
+                        label: (
+                          <Typography.Text type="warning">
+                            {node?.connected ? 'Disconnect from' : 'Connect to'} network
+                          </Typography.Text>
+                        ),
+                        onClick: (ev) => {
+                          ev.domEvent.stopPropagation();
+                          promptConfirmDisconnect();
                         },
                       },
                       {
@@ -615,7 +728,6 @@ export default function NetworkHostDetailsPage(props: PageProps) {
       {notifyCtx}
       {!!node && (
         <UpdateNodeModal
-          key={node.id}
           isOpen={isEditingNode}
           node={node}
           onCancel={() => {

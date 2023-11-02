@@ -4,11 +4,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const assetBasePath = '###ASSET_BASE_PATH###';
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: assetBasePath,
   plugins: [react()],
   build: {
-    sourcemap: process.env.NODE_ENV !== 'production',
+    sourcemap: true,
     target: 'esnext',
   },
   resolve: {
@@ -17,10 +20,12 @@ export default defineConfig({
     },
   },
   test: {
+    name: 'NMUI',
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/tests/setup.ts',
     coverage: {
+      provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
   },

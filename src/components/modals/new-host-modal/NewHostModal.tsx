@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
 import '../CustomModal.scss';
 import './NewHostModal.scss';
 import {
@@ -25,11 +25,14 @@ import { EnrollmentKeysService } from '@/services/EnrollmentKeysService';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { isEnrollmentKeyValid } from '@/utils/EnrollmentKeysUtils';
 import AddEnrollmentKeyModal from '../add-enrollment-key-modal/AddEnrollmentKeyModal';
+import { isSaasBuild } from '@/services/BaseService';
+import { ServerConfigService } from '@/services/ServerConfigService';
 
 interface NewHostModal {
   isOpen: boolean;
   onFinish?: () => void;
   onCancel?: (e: MouseEvent<HTMLButtonElement>) => void;
+  networkId?: string;
 }
 
 const steps = [
@@ -44,7 +47,7 @@ const steps = [
   },
 ];
 
-export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModal) {
+export default function NewHostModal({ isOpen, onCancel, onFinish, networkId }: NewHostModal) {
   const store = useStore();
   const [notify, notifyCtx] = notification.useNotification();
 
@@ -62,9 +65,9 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
       enrollmentKeys
         .filter((key) => isEnrollmentKeyValid(key))
         .filter((key) =>
-          `${key.tags.join('')}${key.networks.join('')}`.toLowerCase().includes(keySearch.toLocaleLowerCase())
+          `${key.tags.join('')}${key.networks.join('')}`.toLowerCase().includes(keySearch.toLocaleLowerCase()),
         ),
-    [enrollmentKeys, keySearch]
+    [enrollmentKeys, keySearch],
   );
 
   const isOnLastStep = useMemo(() => {
@@ -90,6 +93,13 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
   const loadEnrollmentKeys = useCallback(async () => {
     try {
       const keys = (await EnrollmentKeysService.getEnrollmentKeys()).data;
+
+      if (networkId) {
+        const filteredKeys = keys.filter((key) => key.networks.includes(networkId));
+        setEnrollmentKeys(filteredKeys);
+        return;
+      }
+
       setEnrollmentKeys(keys);
     } catch (err) {
       notify.error({
@@ -98,7 +108,7 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
       });
       console.error(err);
     }
-  }, [notify]);
+  }, [notify, networkId]);
 
   const resetModal = () => {
     setCurrentStep(0);
@@ -186,7 +196,12 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                     Create new Key
                   </Button>
                 </div>
-                <Input size="small" placeholder="Search keys" onChange={(ev) => setKeySearch(ev.target.value)} />
+                <Input
+                  size="small"
+                  placeholder="Search keys"
+                  onChange={(ev) => setKeySearch(ev.target.value)}
+                  prefix={<SearchOutlined />}
+                />
                 <Table
                   style={{ marginTop: '1rem' }}
                   size="small"
@@ -252,7 +267,13 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                       className={`os-button ${selectedOs === 'windows' ? 'active' : ''}`}
                       onClick={(ev) => onShowInstallGuide(ev, 'windows')}
                     >
-                      <img src={`/icons/windows-${theme}.jpg`} alt="windows icon" className="logo" />
+                      <img
+                        src={`${
+                          isSaasBuild ? `/${ServerConfigService.getUiVersion()}` : ''
+                        }/icons/windows-${theme}.jpg`}
+                        alt="windows icon"
+                        className="logo"
+                      />
                       <p>Windows</p>
                     </div>
                   </Col>
@@ -261,7 +282,11 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                       className={`os-button ${selectedOs === 'macos' ? 'active' : ''}`}
                       onClick={(ev) => onShowInstallGuide(ev, 'macos')}
                     >
-                      <img src={`/icons/macos-${theme}.jpg`} alt="macos icon" className="logo" />
+                      <img
+                        src={`${isSaasBuild ? `/${ServerConfigService.getUiVersion()}` : ''}/icons/macos-${theme}.jpg`}
+                        alt="macos icon"
+                        className="logo"
+                      />
                       <p>Mac</p>
                     </div>
                   </Col>
@@ -270,16 +295,28 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                       className={`os-button ${selectedOs === 'linux' ? 'active' : ''}`}
                       onClick={(ev) => onShowInstallGuide(ev, 'linux')}
                     >
-                      <img src={`/icons/linux-${theme}.jpg`} alt="linux icon" className="logo" />
+                      <img
+                        src={`${isSaasBuild ? `/${ServerConfigService.getUiVersion()}` : ''}/icons/linux-${theme}.jpg`}
+                        alt="linux icon"
+                        className="logo"
+                      />
                       <p>Linux</p>
                     </div>
                   </Col>
                   <Col xs={4} style={{ textAlign: 'center' }}>
                     <div
-                      className={`os-button ${selectedOs === 'freebsd' ? 'active' : ''}`}
-                      onClick={(ev) => onShowInstallGuide(ev, 'freebsd')}
+                      className={`os-button ${
+                        selectedOs === 'freebsd13' || selectedOs === 'freebsd14' ? 'active' : ''
+                      }`}
+                      onClick={(ev) => onShowInstallGuide(ev, 'freebsd13')}
                     >
-                      <img src={`/icons/freebsd-${theme}.jpg`} alt="freebsd icon" className="logo" />
+                      <img
+                        src={`${
+                          isSaasBuild ? `/${ServerConfigService.getUiVersion()}` : ''
+                        }/icons/freebsd-${theme}.jpg`}
+                        alt="freebsd icon"
+                        className="logo"
+                      />
                       <p>FreeBSD</p>
                     </div>
                   </Col>
@@ -288,7 +325,11 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                       className={`os-button ${selectedOs === 'docker' ? 'active' : ''}`}
                       onClick={(ev) => onShowInstallGuide(ev, 'docker')}
                     >
-                      <img src={`/icons/docker-${theme}.jpg`} alt="docker icon" className="logo" />
+                      <img
+                        src={`${isSaasBuild ? `/${ServerConfigService.getUiVersion()}` : ''}/icons/docker-${theme}.jpg`}
+                        alt="docker icon"
+                        className="logo"
+                      />
                       <p>Docker</p>
                     </div>
                   </Col>
@@ -406,15 +447,23 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                   </>
                 )}
 
-                {selectedOs === 'freebsd' && (
+                {(selectedOs === 'freebsd13' || selectedOs === 'freebsd14') && (
                   <>
                     <Row>
                       <Col xs={24}>
                         <h4 style={{ marginBottom: '.5rem' }}>Install with this command</h4>
+                        <Typography.Title level={5}>FreeBSD 13</Typography.Title>
                         <Typography.Text code copyable>
-                          {`fetch -o netclient ${
-                            getNetclientDownloadLink('freebsd', 'amd64', 'cli')[0]
-                          } && chmod +x ./netclient && sudo ./netclient install`}
+                          {`fetch -o /tmp/netclient ${
+                            getNetclientDownloadLink('freebsd13', 'amd64', 'cli')[0]
+                          } && chmod +x /tmp/netclient && sudo /tmp/netclient install`}
+                        </Typography.Text>
+                        <br />
+                        <Typography.Title level={5}>FreeBSD 14</Typography.Title>
+                        <Typography.Text code copyable>
+                          {`fetch -o /tmp/netclient ${
+                            getNetclientDownloadLink('freebsd14', 'amd64', 'cli')[0]
+                          } && chmod +x /tmp/netclient && sudo /tmp/netclient install`}
                         </Typography.Text>
                       </Col>
                     </Row>
@@ -433,7 +482,6 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
             <Col xs={24}>
               <Card>
                 <Typography.Text>Steps to join a network:</Typography.Text>
-
                 {(selectedOs === 'windows' || selectedOs === 'macos') && (
                   <div>
                     <ol>
@@ -452,14 +500,26 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                     <small>Note: It might take a few minutes for the host to show up in the network(s)</small>
                   </div>
                 )}
-
-                {(selectedOs === 'linux' || selectedOs === 'freebsd') && (
+                {selectedOs === 'linux' && (
                   <div>
                     <ol>
                       <li>
                         <Typography.Text>Run</Typography.Text>
                         <Typography.Text code copyable>
                           {`sudo netclient join -t ${`${selectedEnrollmentKey?.token ?? '<token>'}`}`}
+                        </Typography.Text>
+                      </li>
+                    </ol>
+                    <small>Note: It might take a few minutes for the host to show up in the network(s)</small>
+                  </div>
+                )}
+                {(selectedOs === 'freebsd13' || selectedOs === 'freebsd14') && (
+                  <div>
+                    <ol>
+                      <li>
+                        <Typography.Text>Run</Typography.Text>
+                        <Typography.Text code copyable>
+                          {`sudo /tmp/netclient join -t ${`${selectedEnrollmentKey?.token ?? '<token>'}`}`}
                         </Typography.Text>
                       </li>
                     </ol>
@@ -473,9 +533,7 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
                       <li>
                         <Typography.Text>Run</Typography.Text>
                         <Typography.Text code copyable>
-                          {`sudo docker run -d --network host --privileged -e TOKEN=${
-                            selectedEnrollmentKey?.token
-                          } -v /etc/netclient:/etc/netclient --name netclient gravitl/netclient:${
+                          {`sudo docker run -d --network host --privileged -e TOKEN=${selectedEnrollmentKey?.token} -v /etc/netclient:/etc/netclient --name netclient gravitl/netclient:${
                             store.serverConfig?.Version ?? '<version>'
                           }`}
                         </Typography.Text>
@@ -502,6 +560,7 @@ export default function NewHostModal({ isOpen, onCancel, onFinish }: NewHostModa
         onCancel={() => {
           setIsAddEnrollmentKeyModalOpen(false);
         }}
+        networkId={networkId}
       />
     </Modal>
   );

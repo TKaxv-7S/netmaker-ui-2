@@ -23,7 +23,7 @@ import { Network } from '@/models/Network';
 import { ExtendedNode, Node } from '@/models/Node';
 import { Host } from '@/models/Host';
 import { getExtendedNode, getNodeConnectivityStatus, isNodeRelay } from '@/utils/NodeUtils';
-import { CloseOutlined } from '@ant-design/icons';
+import { CloseOutlined, SearchOutlined } from '@ant-design/icons';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { CreateNodeRelayDto } from '@/services/dtos/CreateNodeRelayDto';
 import { NodesService } from '@/services/NodesService';
@@ -70,7 +70,7 @@ export default function UpdateRelayModal({ relay, isOpen, onUpdateRelay, onCance
 
   const filteredNetworkNodes = useMemo<ExtendedNode[]>(
     () => networkNodes.filter((node) => node.name?.toLowerCase().includes(relayedSearch.toLowerCase())),
-    [networkNodes, relayedSearch]
+    [networkNodes, relayedSearch],
   );
 
   const relayTableCols = useMemo<TableColumnProps<ExtendedNode>[]>(() => {
@@ -147,7 +147,7 @@ export default function UpdateRelayModal({ relay, isOpen, onUpdateRelay, onCance
       style={{ minWidth: '50vw' }}
     >
       <Divider style={{ margin: '0px 0px 2rem 0px' }} />
-      <Form name="add-relay-form" form={form} layout="vertical">
+      <Form name="update-relay-form" form={form} layout="vertical">
         <div className="CustomModalBody">
           <Row
             style={{
@@ -162,7 +162,12 @@ export default function UpdateRelayModal({ relay, isOpen, onUpdateRelay, onCance
             <Col span={6}>{extendedRelay && getNodeConnectivity(extendedRelay)}</Col>
           </Row>
 
-          <Form.Item label="Select hosts to relay" required style={{ marginTop: '1rem' }}>
+          <Form.Item
+            label="Select hosts to relay"
+            required
+            style={{ marginTop: '1rem' }}
+            data-nmui-intercom="update-relay-form_relayed"
+          >
             <Select
               placeholder="Select hosts to relay"
               dropdownRender={() => (
@@ -173,6 +178,7 @@ export default function UpdateRelayModal({ relay, isOpen, onUpdateRelay, onCance
                         placeholder="Search host..."
                         value={relayedSearch}
                         onChange={(e) => setRelayedSearch(e.target.value)}
+                        prefix={<SearchOutlined />}
                       />
                     </Col>
                   </Row>
@@ -184,7 +190,7 @@ export default function UpdateRelayModal({ relay, isOpen, onUpdateRelay, onCance
                         rowKey="id"
                         dataSource={[...filteredNetworkNodes.filter((h) => h.id !== relay.id)].sort((a, b) =>
                           // sort non-relayed hosts to the top
-                          isNodeRelay(a) === isNodeRelay(b) ? 0 : isNodeRelay(a) ? 1 : -1
+                          isNodeRelay(a) === isNodeRelay(b) ? 0 : isNodeRelay(a) ? 1 : -1,
                         )}
                         onRow={(node) => {
                           return {
@@ -253,6 +259,7 @@ export default function UpdateRelayModal({ relay, isOpen, onUpdateRelay, onCance
                 onClick={updateRelay}
                 loading={isSubmitting}
                 danger={selectedRelayedIds.length === 0}
+                data-nmui-intercom="update-relay-form_submitbtn"
               >
                 {selectedRelayedIds.length === 0 ? 'Delete Relay' : 'Update Relay'}
               </Button>

@@ -12,19 +12,17 @@ export interface Host {
   isstatic: boolean;
   listenport: number;
   localrange: string;
-  locallistenport: number;
-  proxy_listen_port: number;
   mtu: number;
   interfaces: Interface[];
   defaultinterface: string; // iface name
   endpointip: string;
   publickey: string;
   macaddress: string;
-  internetgateway: string;
   nodes: Node['id'][];
-  proxy_enabled: boolean;
   isdefault: boolean;
   nat_type: 'public' | 'symmetric' | 'asymmetric' | 'double' | '';
+  persistentkeepalive: number;
+  autoupdate: boolean;
 }
 
 export interface HostCommonDetails {

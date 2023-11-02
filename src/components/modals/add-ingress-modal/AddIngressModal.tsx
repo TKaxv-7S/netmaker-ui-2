@@ -20,7 +20,7 @@ import '../CustomModal.scss';
 import { Network } from '@/models/Network';
 import { ExtendedNode, Node } from '@/models/Node';
 import { getExtendedNode, getNodeConnectivityStatus, isHostNatted } from '@/utils/NodeUtils';
-import { CloseOutlined } from '@ant-design/icons';
+import { CloseOutlined, SearchOutlined } from '@ant-design/icons';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { NodesService } from '@/services/NodesService';
 import { Host } from '@/models/Host';
@@ -60,9 +60,9 @@ export default function AddIngressModal({ isOpen, onCreateIngress, onCancel, net
         (node) =>
           (node.name?.toLowerCase().includes(gatewaySearch.toLowerCase()) ||
             node.address?.toLowerCase().includes(gatewaySearch.toLowerCase())) &&
-          node.isingressgateway === false
+          node.isingressgateway === false,
       ),
-    [gatewaySearch, networkHosts]
+    [gatewaySearch, networkHosts],
   );
 
   const selectedGatewayHost = useMemo<Host | null>(() => {
@@ -155,7 +155,13 @@ export default function AddIngressModal({ isOpen, onCreateIngress, onCancel, net
       <Form name="add-ingress-form" form={form} layout="vertical">
         <div className="" style={{ maxHeight: '60vh', overflow: 'auto' }}>
           <div className="CustomModalBody">
-            <Form.Item label="Host" name="node" rules={[{ required: true }]} style={{ marginBottom: '0px' }}>
+            <Form.Item
+              label="Host"
+              name="node"
+              rules={[{ required: true }]}
+              style={{ marginBottom: '0px' }}
+              data-nmui-intercom="add-ingress-form_node"
+            >
               <Select
                 open={isSelectOpen}
                 placeholder="Select a host as gateway"
@@ -169,6 +175,7 @@ export default function AddIngressModal({ isOpen, onCreateIngress, onCancel, net
                           placeholder="Search host"
                           value={gatewaySearch}
                           onChange={(e) => setGatewaySearch(e.target.value)}
+                          prefix={<SearchOutlined />}
                         />
                       </Col>
                     </Row>
@@ -242,7 +249,12 @@ export default function AddIngressModal({ isOpen, onCreateIngress, onCancel, net
               </>
             )}
 
-            <Form.Item label="Default client DNS" name="extclientdns" style={{ marginTop: '1rem' }}>
+            <Form.Item
+              label="Default client DNS"
+              name="extclientdns"
+              style={{ marginTop: '1rem' }}
+              data-nmui-intercom="add-ingress-form_extclientdns"
+            >
               <Input placeholder="Default DNS for associated external clients" />
             </Form.Item>
           </div>

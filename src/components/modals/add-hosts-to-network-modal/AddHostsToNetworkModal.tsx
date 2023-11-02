@@ -6,6 +6,7 @@ import { Network } from '@/models/Network';
 import { Host } from '@/models/Host';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { HostsService } from '@/services/HostsService';
+import { SearchOutlined } from '@ant-design/icons';
 
 interface AddHostsToNetworkModalProps {
   isOpen: boolean;
@@ -68,7 +69,7 @@ export default function AddHostsToNetworkModal({
         },
       });
     },
-    [networkId, notify]
+    [networkId, notify],
   );
 
   // TODO: add autofill for fields
@@ -91,7 +92,12 @@ export default function AddHostsToNetworkModal({
         <div className="CustomModalBody">
           <Row>
             <Col xs={24}>
-              <Input placeholder="Search host" value={hostSearch} onChange={(ev) => setHostSearch(ev.target.value)} />
+              <Input
+                placeholder="Search host"
+                value={hostSearch}
+                onChange={(ev) => setHostSearch(ev.target.value)}
+                prefix={<SearchOutlined />}
+              />
             </Col>
           </Row>
           <Row style={{ marginTop: '1rem' }}>

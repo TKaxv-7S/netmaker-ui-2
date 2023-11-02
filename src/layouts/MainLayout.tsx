@@ -4,19 +4,23 @@ import {
   GlobalOutlined,
   KeyOutlined,
   LaptopOutlined,
+  LoadingOutlined,
   LogoutOutlined,
+  RightOutlined,
   // MobileOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { Alert, Col, MenuProps, Row, Select, Switch, Typography } from 'antd';
 import { Layout, Menu, theme } from 'antd';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { getAmuiUrl, getHostRoute, getNetworkRoute } from '../utils/RouteUtils';
-import { useStore } from '../store/store';
+import { getAmuiTenantsUrl, getAmuiUrl, getHostRoute, getNetworkRoute, resolveAppRoute } from '../utils/RouteUtils';
+import { BrowserStore, useStore } from '../store/store';
 import { AppRoutes } from '@/routes';
 import { useTranslation } from 'react-i18next';
 import { isSaasBuild } from '@/services/BaseService';
 import { ServerConfigService } from '@/services/ServerConfigService';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { useBranding } from '@/utils/Utils';
 
 const { Content, Sider } = Layout;
 
@@ -35,8 +39,10 @@ export default function MainLayout() {
   const storeFetchNetworks = useStore((state) => state.fetchNetworks);
   const storeLogout = useStore((state) => state.logout);
   const location = useLocation();
+  const branding = useBranding();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [openSidebarMenus, setOpenSidebarMenus] = useState(['networks']);
 
   const recentNetworks = useMemo(
     // TODO: implement most recent ranking
@@ -44,8 +50,28 @@ export default function MainLayout() {
       structuredClone(store.networks)
         .sort((a, b) => a.netid.localeCompare(b.netid))
         .slice(0, 5),
-    [store.networks]
+    [store.networks],
   );
+
+  const sidebarLogo = useMemo(() => {
+    const { logoDarkUrl, logoLightUrl, logoDarkSmallUrl, logoLightSmallUrl } = branding;
+
+    if (currentTheme === 'dark') {
+      if (isSidebarCollapsed) {
+        return isSaasBuild ? `/${ServerConfigService.getUiVersion()}${logoDarkSmallUrl}` : logoDarkSmallUrl;
+      } else {
+        return isSaasBuild ? `/${ServerConfigService.getUiVersion()}${logoDarkUrl}` : logoDarkUrl;
+      }
+    } else if (currentTheme === 'light') {
+      if (isSidebarCollapsed) {
+        return isSaasBuild ? `/${ServerConfigService.getUiVersion()}${logoLightSmallUrl}` : logoLightSmallUrl;
+      } else {
+        return isSaasBuild ? `/${ServerConfigService.getUiVersion()}${logoLightUrl}` : logoLightUrl;
+      }
+    }
+
+    return '';
+  }, [branding, currentTheme, isSidebarCollapsed]);
 
   const sideNavItems: MenuProps['items'] = useMemo(
     () =>
@@ -100,6 +126,11 @@ export default function MainLayout() {
                   icon: UserOutlined,
                   label: 'Manage Account',
                 },
+                {
+                  key: 'amuitenants',
+                  icon: RightOutlined,
+                  label: 'Switch Tenant',
+                },
               ]
             : [
                 // {
@@ -107,10 +138,10 @@ export default function MainLayout() {
                 //   icon: UserOutlined,
                 //   label: 'Users',
                 // },
-              ]
+              ],
         )
         .concat(
-          isSaasBuild || store.user?.isadmin
+          !isSaasBuild
             ? [
                 {
                   key: 'users',
@@ -118,7 +149,7 @@ export default function MainLayout() {
                   label: 'Users',
                 },
               ]
-            : []
+            : [],
         )
         .map((item) => ({
           key: item.key,
@@ -135,7 +166,7 @@ export default function MainLayout() {
             type: (child as any)?.type,
           })),
         })),
-    [recentNetworks, store.user?.isadmin]
+    [recentNetworks, store.user?.isadmin, store.user?.issuperadmin],
   );
 
   const sideNavBottomItems: MenuProps['items'] = useMemo(
@@ -241,7 +272,7 @@ export default function MainLayout() {
                 }}
                 onClick={() => {
                   storeLogout();
-                  navigate(AppRoutes.LOGIN_ROUTE);
+                  navigate(resolveAppRoute(AppRoutes.LOGIN_ROUTE));
                 }}
               >
                 <LogoutOutlined /> Logout
@@ -251,21 +282,21 @@ export default function MainLayout() {
         ],
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isSidebarCollapsed, currentTheme, i18n.language, navigate, setCurrentTheme, store.username, storeLogout]
+    [isSidebarCollapsed, currentTheme, i18n.language, navigate, setCurrentTheme, store.username, storeLogout],
   );
 
   const getActiveSideNavKeys = useCallback(() => {
-    if (location.pathname === AppRoutes.NETWORKS_ROUTE) {
+    if (location.pathname === resolveAppRoute(AppRoutes.NETWORKS_ROUTE)) {
       return ['networks', 'all-networks'];
-    } else if (location.pathname === AppRoutes.HOSTS_ROUTE) {
+    } else if (location.pathname === resolveAppRoute(AppRoutes.HOSTS_ROUTE)) {
       return ['hosts', 'all-hosts'];
-    } else if (location.pathname === AppRoutes.CLIENTS_ROUTE) {
+    } else if (location.pathname === resolveAppRoute(AppRoutes.CLIENTS_ROUTE)) {
       return ['clients'];
-    } else if (location.pathname === AppRoutes.ENROLLMENT_KEYS_ROUTE) {
+    } else if (location.pathname === resolveAppRoute(AppRoutes.ENROLLMENT_KEYS_ROUTE)) {
       return ['enrollment-keys'];
-    } else if (location.pathname === AppRoutes.DASHBOARD_ROUTE) {
+    } else if (location.pathname === resolveAppRoute(AppRoutes.DASHBOARD_ROUTE)) {
       return ['dashboard'];
-    } else if (location.pathname === AppRoutes.USERS_ROUTE) {
+    } else if (location.pathname === resolveAppRoute(AppRoutes.USERS_ROUTE)) {
       return ['users'];
     }
   }, [location.pathname]);
@@ -275,122 +306,135 @@ export default function MainLayout() {
   }, [storeFetchNetworks]);
 
   return (
-    <Layout hasSider>
-      <Sider
-        collapsible
-        collapsed={isSidebarCollapsed}
-        onCollapse={(value) => setIsSidebarCollapsed(value)}
-        width={SIDE_NAV_EXPANDED_WIDTH}
-        theme="light"
-        style={{
-          overflow: 'auto',
-          height: '100vh',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          borderRight: `1px solid ${themeToken.colorBorder}`,
-        }}
-      >
-        {/* logo */}
-        <Link to={AppRoutes.DASHBOARD_ROUTE}>
-          <img
-            src={isSidebarCollapsed ? `/logo-small-${store.currentTheme}.png` : `/logo-${store.currentTheme}.png`}
-            alt="logo"
-            style={{ width: '100%', padding: '1rem 2rem 1rem 2rem' }}
-          />
-        </Link>
-
-        <Menu
+    <AppErrorBoundary key={location.pathname}>
+      <Layout hasSider>
+        <Sider
+          collapsible
+          collapsed={isSidebarCollapsed}
+          onCollapse={(value) => setIsSidebarCollapsed(value)}
+          width={SIDE_NAV_EXPANDED_WIDTH}
           theme="light"
-          mode="inline"
-          selectedKeys={getActiveSideNavKeys()}
-          items={sideNavItems}
-          defaultOpenKeys={['networks', 'hosts']}
-          style={{ borderRight: 'none' }}
-          onClick={(menu) => {
-            switch (menu.key) {
-              case 'dashboard':
-                navigate(AppRoutes.DASHBOARD_ROUTE);
-                break;
-              case 'all-networks':
-                navigate(AppRoutes.NETWORKS_ROUTE);
-                break;
-              case 'hosts':
-                navigate(AppRoutes.HOSTS_ROUTE);
-                break;
-              case 'clients':
-                navigate(AppRoutes.CLIENTS_ROUTE);
-                break;
-              case 'enrollment-keys':
-                navigate(AppRoutes.ENROLLMENT_KEYS_ROUTE);
-                break;
-              case 'amui':
-                window.location = getAmuiUrl() as any;
-                break;
-              case 'users':
-                navigate(AppRoutes.USERS_ROUTE);
-                break;
-              default:
-                if (menu.key.startsWith('networks/')) {
-                  navigate(getNetworkRoute(menu.key.replace('networks/', '')));
-                } else if (menu.key.startsWith('hosts/')) {
-                  navigate(getHostRoute(menu.key.replace('hosts/', '')));
-                }
-                break;
-            }
+          style={{
+            overflow: 'auto',
+            height: '100vh',
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            borderRight: `1px solid ${themeToken.colorBorder}`,
           }}
-        />
+        >
+          {/* logo */}
+          <Link to={resolveAppRoute(AppRoutes.DASHBOARD_ROUTE)}>
+            <img
+              loading="eager"
+              referrerPolicy="no-referrer"
+              src={sidebarLogo}
+              alt={branding.logoAltText}
+              style={{ width: '100%', padding: '1rem 2rem 1rem 2rem' }}
+            />
+          </Link>
 
-        {/* server version */}
-        {!isSidebarCollapsed && (
-          <div style={{ marginTop: '1rem', padding: '0rem 1.5rem', fontSize: '.8rem' }}>
-            <Typography.Text style={{ fontSize: 'inherit' }}>UI: {ServerConfigService.getUiVersion()}</Typography.Text>
-            <br />
-            <Typography.Text style={{ fontSize: 'inherit' }} type="secondary">
-              Server: {store.serverConfig?.Version ?? 'n/a'}
-            </Typography.Text>
-          </div>
-        )}
-
-        {/* bottom items */}
-        <Menu
-          theme="light"
-          mode="inline"
-          selectable={false}
-          items={sideNavBottomItems}
-          style={{ borderRight: 'none', position: 'absolute', bottom: '0' }}
-        />
-      </Sider>
-
-      {/* main content */}
-      <Layout
-        style={{
-          transition: 'all 200ms',
-          marginLeft: isSidebarCollapsed ? SIDE_NAV_COLLAPSED_WIDTH : SIDE_NAV_EXPANDED_WIDTH,
-        }}
-      >
-        <Content style={{ background: themeToken.colorBgContainer, overflow: 'initial', minHeight: '100vh' }}>
-          {/* server status indicator */}
-          {!store.serverStatus.isHealthy && (
-            <Row>
-              <Col xs={24}>
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ border: 'none', height: '4rem', fontSize: '1rem', color: '#D4B106' }}
-                  message={
-                    !store.serverStatus.status?.healthyNetwork
-                      ? 'Unable to react Netmaker server. Check you internet connection.'
-                      : 'Your Netmaker server is not running properly. This may impact network performance. Contact your administrator.'
+          <Menu
+            theme="light"
+            mode="inline"
+            selectedKeys={getActiveSideNavKeys()}
+            items={sideNavItems}
+            openKeys={openSidebarMenus}
+            style={{ borderRight: 'none' }}
+            onOpenChange={(keys: string[]) => {
+              setOpenSidebarMenus(keys);
+            }}
+            onClick={(menu) => {
+              switch (menu.key) {
+                case 'dashboard':
+                  navigate(resolveAppRoute(AppRoutes.DASHBOARD_ROUTE));
+                  break;
+                case 'all-networks':
+                  navigate(resolveAppRoute(AppRoutes.NETWORKS_ROUTE));
+                  break;
+                case 'hosts':
+                  navigate(resolveAppRoute(AppRoutes.HOSTS_ROUTE));
+                  break;
+                case 'clients':
+                  navigate(resolveAppRoute(AppRoutes.CLIENTS_ROUTE));
+                  break;
+                case 'enrollment-keys':
+                  navigate(resolveAppRoute(AppRoutes.ENROLLMENT_KEYS_ROUTE));
+                  break;
+                case 'amui':
+                  window.location = getAmuiUrl() as any;
+                  break;
+                case 'amuitenants':
+                  window.location = getAmuiTenantsUrl() as any;
+                  break;
+                case 'users':
+                  navigate(resolveAppRoute(AppRoutes.USERS_ROUTE));
+                  break;
+                default:
+                  if (menu.key.startsWith('networks/')) {
+                    navigate(getNetworkRoute(menu.key.replace('networks/', '')));
+                  } else if (menu.key.startsWith('hosts/')) {
+                    navigate(getHostRoute(menu.key.replace('hosts/', '')));
                   }
-                />
-              </Col>
-            </Row>
+                  break;
+              }
+            }}
+          />
+
+          {/* server version */}
+          {!isSidebarCollapsed && (
+            <div style={{ marginTop: '1rem', padding: '0rem 1.5rem', fontSize: '.8rem' }}>
+              <Typography.Text style={{ fontSize: 'inherit' }}>
+                UI: {ServerConfigService.getUiVersion()}{' '}
+                {isSaasBuild && !BrowserStore.hasNmuiVersionSynced() && <LoadingOutlined />}
+              </Typography.Text>
+              <br />
+              <Typography.Text style={{ fontSize: 'inherit' }} type="secondary">
+                Server: {store.serverConfig?.Version ?? 'n/a'}
+              </Typography.Text>
+            </div>
           )}
-          <Outlet />
-        </Content>
+
+          {/* bottom items */}
+          <Menu
+            theme="light"
+            mode="inline"
+            selectable={false}
+            items={sideNavBottomItems}
+            style={{ borderRight: 'none', position: 'absolute', bottom: '0' }}
+          />
+        </Sider>
+
+        {/* main content */}
+        <Layout
+          style={{
+            transition: 'all 200ms',
+            marginLeft: isSidebarCollapsed ? SIDE_NAV_COLLAPSED_WIDTH : SIDE_NAV_EXPANDED_WIDTH,
+          }}
+        >
+          <Content style={{ background: themeToken.colorBgContainer, overflow: 'initial', minHeight: '100vh' }}>
+            {/* server status indicator */}
+            {!store.serverStatus.isHealthy && (
+              <Row>
+                <Col xs={24}>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ border: 'none', height: '4rem', fontSize: '1rem', color: '#D4B106' }}
+                    message={
+                      !store.serverStatus.status?.healthyNetwork
+                        ? `Unable to reach ${branding.productName} server. Check you internet connection.`
+                        : `Your ${branding.productName} server is not running properly. This may impact network performance. Contact your administrator.`
+                    }
+                  />
+                </Col>
+              </Row>
+            )}
+            <Outlet />
+          </Content>
+        </Layout>
       </Layout>
-    </Layout>
+    </AppErrorBoundary>
   );
 }

@@ -17,27 +17,16 @@ LABEL \
 WORKDIR /usr/app
 COPY . /usr/app
 
+RUN apk add --no-cache jq
+
 # Switch for SaaS or Standalone build
 ENV VITE_IS_SAAS_BUILD=true
 
 
 # Essential vars
 
-
-# Standalone build mandatory vars
-
-# This value is used if `BACKEND_URL` env var is unset.
-# BACKEND_URL is used for dynamic URL injection
-ENV VITE_BASE_URL=
-
 ENV VITE_LICENSE_DASHBOARD_URL=https://account.netmaker.io
-
-
-# EE customisations
-
-ENV VITE_TENANT_LOGO=
-ENV VITE_TENANT_NAME=
-
+ENV VITE_NETMAKER_SUPPORT_EMAIL=help@netmaker.io
 
 # Other vars
 

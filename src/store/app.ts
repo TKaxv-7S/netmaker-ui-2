@@ -15,7 +15,7 @@ export interface IAppSlice {
   setLogoUrl: (url: string) => void;
   setServerName: (name: string) => void;
   setServerStatus: (status: ServerStatus) => void;
-  fetchServerConfig: () => Promise<boolean>;
+  fetchServerConfig: () => Promise<[Boolean, ServerConfig | null]>; // eslint-disable-line @typescript-eslint/ban-types
 }
 
 const createAppSlice: StateCreator<IAppSlice, [], [], IAppSlice> = (set) => ({
@@ -32,17 +32,17 @@ const createAppSlice: StateCreator<IAppSlice, [], [], IAppSlice> = (set) => ({
     set(() => ({
       serverStatus: {
         status,
-        isHealthy: status.broker_connected && status.db_connected && status.healthyNetwork,
+        isHealthy: status.broker_connected && status.db_connected && status.healthyNetwork && !status.license_error,
       },
     })),
   fetchServerConfig: async () => {
     try {
       const serverConfig = (await ServerConfigService.getServerConfig()).data;
       set(() => ({ serverConfig }));
-      return Promise.resolve(true);
+      return Promise.resolve([true, serverConfig]);
     } catch (err) {
       console.error(err);
-      return Promise.reject(false);
+      return Promise.reject([false, null]);
     }
   },
 });

@@ -1,14 +1,16 @@
-import { ApiRoutes } from '@/constants/ApiRoutes';
-import { User } from '@/models/User';
+// import { ApiRoutes } from '@/constants/ApiRoutes';
+// import { User } from '@/models/User';
 import { useStore } from '@/store/store';
 import { truncateQueryParamsFromCurrentUrl } from '@/utils/RouteUtils';
 import axios from 'axios';
 
 export const isSaasBuild = import.meta.env.VITE_IS_SAAS_BUILD?.toLocaleLowerCase() === 'true';
 
-export const baseService = axios.create();
+export const axiosService = axios.create();
 
 export const AMUI_URL = isSaasBuild ? (window as any).NMUI_AMUI_URL : '';
+
+export const INTERCOM_APP_ID = isSaasBuild ? (window as any).NMUI_INTERCOM_APP_ID : '';
 
 // function to resolve the particular SaaS tenant's backend URL, ...
 export async function setupTenantConfig(): Promise<void> {
@@ -18,7 +20,7 @@ export async function setupTenantConfig(): Promise<void> {
     useStore.getState().setStore({
       baseUrl: resolvedBaseUrl,
     });
-    baseService.defaults.baseURL = resolvedBaseUrl;
+    axiosService.defaults.baseURL = resolvedBaseUrl;
     return;
   }
 
@@ -29,13 +31,14 @@ export async function setupTenantConfig(): Promise<void> {
   const tenantId = url.searchParams.get('tenantId') ?? '';
   const tenantName = url.searchParams.get('tenantName') ?? '';
   const username = url.searchParams.get('username') ?? '';
+  const amuiUserId = url.searchParams.get('userId') ?? '';
 
   const resolvedBaseUrl = baseUrl
     ? baseUrl?.startsWith('https')
       ? `${baseUrl}/api`
       : `https://${baseUrl}/api`
     : useStore.getState().baseUrl;
-  baseService.defaults.baseURL = resolvedBaseUrl;
+  axiosService.defaults.baseURL = resolvedBaseUrl;
 
   truncateQueryParamsFromCurrentUrl();
 
@@ -55,16 +58,17 @@ export async function setupTenantConfig(): Promise<void> {
   useStore.getState().setStore({
     baseUrl: resolvedBaseUrl,
     jwt: accessToken || useStore.getState().jwt,
-    tenantId,
-    tenantName,
+    tenantId: tenantId || useStore.getState().tenantId,
+    tenantName: tenantName || useStore.getState().tenantName,
     amuiAuthToken,
-    username,
+    username: username || useStore.getState().username,
+    amuiUserId: amuiUserId || useStore.getState().amuiUserId,
     // user,
   });
 }
 
 // token interceptor for axios
-baseService.interceptors.request.use((config) => {
+axiosService.interceptors.request.use((config) => {
   const token = useStore.getState().jwt;
 
   if (token) {
@@ -74,7 +78,7 @@ baseService.interceptors.request.use((config) => {
   return config;
 });
 
-baseService.interceptors.response.use(
+axiosService.interceptors.response.use(
   (res) => {
     return res;
   },
@@ -87,5 +91,5 @@ baseService.interceptors.response.use(
     }
     // Return the error so it can be handled by the calling code
     return Promise.reject(err);
-  }
+  },
 );

@@ -13,19 +13,17 @@ export const NULL_HOST: Host = {
   isstatic: false,
   listenport: 0,
   localrange: '',
-  locallistenport: 0,
-  proxy_listen_port: 0,
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
   publickey: '',
   macaddress: '',
-  internetgateway: '',
   nodes: [],
-  proxy_enabled: false,
   isdefault: false,
   nat_type: 'public',
+  persistentkeepalive: 0,
+  autoupdate: false,
 };
 
 export const NULL_NODE: Node = {
@@ -34,7 +32,6 @@ export const NULL_NODE: Node = {
   address: '',
   address6: '',
   localaddress: '',
-  persistentkeepalive: 0,
   interface: '',
   macaddress: '',
   lastmodified: 0,
@@ -60,6 +57,7 @@ export const NULL_NODE: Node = {
   failover: false,
   relayedby: '',
   relaynodes: [],
+  autoupdate: false,
 };
 
 export const NULL_NETWORK_PROSETTINGS: ProSettings = {

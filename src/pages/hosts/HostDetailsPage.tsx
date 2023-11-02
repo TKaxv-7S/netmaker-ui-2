@@ -6,7 +6,7 @@ import { HostsService } from '@/services/HostsService';
 import { useStore } from '@/store/store';
 import { getNodeConnectivityStatus } from '@/utils/NodeUtils';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
-import { ExclamationCircleFilled, SettingOutlined } from '@ant-design/icons';
+import { ExclamationCircleFilled, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
@@ -32,7 +32,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PageProps } from '../../models/Page';
 
 import './HostDetailsPage.scss';
-import { useQuery } from '@/utils/RouteUtils';
+import { resolveAppRoute, useQuery } from '@/utils/RouteUtils';
 
 export default function HostDetailsPage(props: PageProps) {
   const { hostId } = useParams<{ hostId: string }>();
@@ -43,6 +43,7 @@ export default function HostDetailsPage(props: PageProps) {
   const queryParams = useQuery();
 
   const storeUpdateHost = store.updateHost;
+  const storeDeleteHost = store.deleteHost;
   const [isLoading, setIsLoading] = useState(false);
   const [isEditingHost, setIsEditingHost] = useState(false);
   const [host, setHost] = useState<Host | null>(null);
@@ -66,34 +67,12 @@ export default function HostDetailsPage(props: PageProps) {
         dataIndex: 'addressString',
       },
     ],
-    [host?.defaultinterface]
+    [host?.defaultinterface],
   );
 
   const onUpdateHost = useCallback(() => {
     setIsEditingHost(false);
   }, []);
-
-  // const toggleProxyStatus = useCallback(
-  //   (newStatus: boolean) => {
-  //     Modal.confirm({
-  //       title: 'Toggle proxy status',
-  //       content: `Are you sure you want to turn ${newStatus ? 'on' : 'off'} proxy for this host?`,
-  //       onOk: async () => {
-  //         try {
-  //           if (!hostId || !host) return;
-  //           const newHost = (await HostsService.updateHost(hostId, { ...host, proxy_enabled: newStatus })).data;
-  //           storeUpdateHost(hostId, newHost);
-  //         } catch (err) {
-  //           notify.error({
-  //             message: 'Failed to update host',
-  //             description: extractErrorMsg(err as any),
-  //           });
-  //         }
-  //       },
-  //     });
-  //   },
-  //   [hostId, host, storeUpdateHost, notify]
-  // );
 
   const getHostHealth = useCallback(() => {
     const nodeHealths = store.nodes
@@ -133,13 +112,13 @@ export default function HostDetailsPage(props: PageProps) {
   const loadHost = useCallback(() => {
     setIsLoading(true);
     if (!hostId) {
-      navigate(AppRoutes.HOSTS_ROUTE);
+      navigate(resolveAppRoute(AppRoutes.HOSTS_ROUTE));
     }
     // load from store
     const host = store.hosts.find((h) => h.id === hostId);
     if (!host) {
       notify.error({ message: `Host ${hostId} not found` });
-      navigate(AppRoutes.HOSTS_ROUTE);
+      navigate(resolveAppRoute(AppRoutes.HOSTS_ROUTE));
       return;
     }
     setHost(host);
@@ -152,10 +131,10 @@ export default function HostDetailsPage(props: PageProps) {
       if (!hostId) {
         throw new Error('Host not found');
       }
-      await HostsService.deleteHost(hostId);
-      notify.success({ message: `Host ${hostId} deleted` });
-      store.deleteNetwork(hostId);
-      navigate(AppRoutes.HOSTS_ROUTE);
+      await HostsService.deleteHost(hostId, true);
+      notify.success({ message: `Host ${host?.name} deleted` });
+      storeDeleteHost(hostId);
+      navigate(resolveAppRoute(AppRoutes.HOSTS_ROUTE));
     } catch (err) {
       if (err instanceof AxiosError) {
         notify.error({
@@ -168,12 +147,31 @@ export default function HostDetailsPage(props: PageProps) {
         });
       }
     }
-  }, [hostId, notify, navigate, store]);
+  }, [hostId, notify, host?.name, storeDeleteHost, navigate]);
 
   const promptConfirmDelete = () => {
+    if (!host) return;
+    const assocNodes = store.nodes.filter((node) => node.hostid === host.id);
+
     Modal.confirm({
       title: `Do you want to delete host ${host?.name}?`,
       icon: <ExclamationCircleFilled />,
+      content: (
+        <>
+          <Row>
+            {assocNodes.length > 0 && (
+              <Col xs={24}>
+                <Typography.Text color="warning">Host will be removed from the following networks:</Typography.Text>
+                <ul>
+                  {assocNodes.map((node) => (
+                    <li key={node.id}>{node.network}</li>
+                  ))}
+                </ul>
+              </Col>
+            )}
+          </Row>
+        </>
+      ),
       onOk() {
         onHostDelete();
       },
@@ -222,6 +220,28 @@ export default function HostDetailsPage(props: PageProps) {
     });
   }, [notify, hostId]);
 
+  const requestHostPull = useCallback(() => {
+    if (!hostId) return;
+    Modal.confirm({
+      title: 'Synchronise host',
+      content: `This will trigger this host to pull latest network(s) state from the server. Proceed?`,
+      onOk: async () => {
+        try {
+          await HostsService.requestHostPull(hostId);
+          notify.success({
+            message: 'Host is syncing...',
+            description: `Host pull has been initiated. This may take a while.`,
+          });
+        } catch (err) {
+          notify.error({
+            message: 'Failed to synchronise host',
+            description: extractErrorMsg(err as any),
+          });
+        }
+      },
+    });
+  }, [notify, hostId]);
+
   const getOverviewContent = useCallback(() => {
     if (!host) return <Skeleton active />;
     return (
@@ -241,7 +261,10 @@ export default function HostDetailsPage(props: PageProps) {
             Host details
           </Typography.Title>
 
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_id"
+          >
             <Col xs={12}>
               <Typography.Text disabled>ID</Typography.Text>
             </Col>
@@ -249,7 +272,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.id}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_endpoint"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Endpoint</Typography.Text>
             </Col>
@@ -257,7 +283,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.endpointip}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_listenport"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Listen Port</Typography.Text>
             </Col>
@@ -265,7 +294,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.listenport}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_macaddress"
+          >
             <Col xs={12}>
               <Typography.Text disabled>MAC Address</Typography.Text>
             </Col>
@@ -273,7 +305,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.macaddress}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_mtu"
+          >
             <Col xs={12}>
               <Typography.Text disabled>MTU</Typography.Text>
             </Col>
@@ -281,7 +316,21 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.mtu}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_persistentkeepalive"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Persistent Keepalive</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{host?.persistentkeepalive ?? ''}</Typography.Text>
+            </Col>
+          </Row>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_publickey"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Public Key</Typography.Text>
             </Col>
@@ -289,7 +338,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.publickey}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_os"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Operating System</Typography.Text>
             </Col>
@@ -297,7 +349,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.os}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_version"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Version</Typography.Text>
             </Col>
@@ -305,7 +360,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.version}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_verbosity"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Verbosity</Typography.Text>
             </Col>
@@ -313,7 +371,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.verbosity}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_defaultinterface"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Default Interface</Typography.Text>
             </Col>
@@ -321,7 +382,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.defaultinterface}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_isdefault"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Default Host</Typography.Text>
             </Col>
@@ -329,7 +393,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.isdefault ? 'Yes' : 'No'}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_isstatic"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Static Endpoint</Typography.Text>
             </Col>
@@ -337,7 +404,10 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.isstatic ? 'Yes' : 'No'}</Typography.Text>
             </Col>
           </Row>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_debug"
+          >
             <Col xs={12}>
               <Typography.Text disabled>Debug</Typography.Text>
             </Col>
@@ -345,30 +415,24 @@ export default function HostDetailsPage(props: PageProps) {
               <Typography.Text>{host.debug ? 'Yes' : 'No'}</Typography.Text>
             </Col>
           </Row>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_autoupdate"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Auto Update</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{host.autoupdate ? 'Yes' : 'No'}</Typography.Text>
+            </Col>
+          </Row>
         </Card>
 
-        <Card style={{ width: '50%', marginTop: '2rem' }}>
+        {/* <Card style={{ width: '50%', marginTop: '2rem' }}>
           <Typography.Title level={5} style={{ marginTop: '0rem' }}>
             Advanced settings
           </Typography.Title>
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
-            <Col xs={12}>
-              <Typography.Text disabled>Internet Gateway</Typography.Text>
-            </Col>
-            <Col xs={12}>
-              <Typography.Text>{host.internetgateway}</Typography.Text>
-            </Col>
-          </Row>
-
-          <Row style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}>
-            <Col xs={12}>
-              <Typography.Text disabled>Proxy Listen Port</Typography.Text>
-            </Col>
-            <Col xs={12}>
-              <Typography.Text>{host.listenport}</Typography.Text>
-            </Col>
-          </Row>
-        </Card>
+        </Card> */}
       </div>
     );
   }, [host, themeToken.colorBorder]);
@@ -383,6 +447,7 @@ export default function HostDetailsPage(props: PageProps) {
               placeholder="Search interfaces"
               value={searchText}
               onChange={(ev) => setSearchText(ev.target.value)}
+              prefix={<SearchOutlined />}
             />
           </Col>
         </Row>
@@ -391,10 +456,10 @@ export default function HostDetailsPage(props: PageProps) {
             <Table
               columns={interfacesTableCols}
               dataSource={
-                host?.interfaces.filter((iface) =>
+                host?.interfaces?.filter((iface) =>
                   `${iface.name}${iface.addressString}`
                     .toLocaleLowerCase()
-                    .includes(searchText.toLocaleLowerCase().trim())
+                    .includes(searchText.toLocaleLowerCase().trim()),
                 ) ?? []
               }
               rowKey={(iface) => `${iface.name}${iface.addressString}`}
@@ -442,7 +507,7 @@ export default function HostDetailsPage(props: PageProps) {
         {/* top bar */}
         <Row className="tabbed-page-row-padding">
           <Col xs={24}>
-            <Link to={AppRoutes.HOSTS_ROUTE}>View All Hosts</Link>
+            <Link to={resolveAppRoute(AppRoutes.HOSTS_ROUTE)}>View All Hosts</Link>
             <Row>
               <Col xs={18}>
                 <Typography.Title level={2} style={{ marginTop: '.5rem', marginBottom: '2rem' }}>
@@ -451,10 +516,6 @@ export default function HostDetailsPage(props: PageProps) {
                 </Typography.Title>
               </Col>
               <Col xs={6} style={{ textAlign: 'right' }}>
-                {/* <span style={{ marginRight: '2rem' }}>
-                  <Typography.Text style={{ marginRight: '1rem' }}>Proxy Status</Typography.Text>
-                  <Switch checked={host?.proxy_enabled} onChange={toggleProxyStatus} />
-                </span> */}
                 <Dropdown
                   placement="bottomRight"
                   menu={{
@@ -471,6 +532,14 @@ export default function HostDetailsPage(props: PageProps) {
                             {host?.isdefault ? 'Unmake default' : 'Make default'}
                           </Typography.Text>
                         ),
+                      },
+                      {
+                        key: 'sync',
+                        label: <Typography.Text>Sync</Typography.Text>,
+                        onClick: (ev) => {
+                          ev.domEvent.stopPropagation();
+                          requestHostPull();
+                        },
                       },
                       {
                         key: 'refresh-key',

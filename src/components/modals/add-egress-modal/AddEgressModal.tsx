@@ -23,7 +23,7 @@ import '../CustomModal.scss';
 import { Network } from '@/models/Network';
 import { ExtendedNode, Node } from '@/models/Node';
 import { getExtendedNode, getNodeConnectivityStatus } from '@/utils/NodeUtils';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { CloseOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { AxiosError } from 'axios';
 import { NodesService } from '@/services/NodesService';
@@ -71,7 +71,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
 
   const network = useMemo<Network | undefined>(
     () => store.networks.find((net) => net.netid === networkId),
-    [networkId, store.networks]
+    [networkId, store.networks],
   );
 
   const networkHosts = useMemo<ExtendedNode[]>(() => {
@@ -85,9 +85,9 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
       networkHosts.filter(
         (node) =>
           node.name?.toLowerCase().includes(egressSearch.toLowerCase()) ||
-          node.address?.toLowerCase().includes(egressSearch.toLowerCase())
+          node.address?.toLowerCase().includes(egressSearch.toLowerCase()),
       ),
-    [egressSearch, networkHosts]
+    [egressSearch, networkHosts],
   );
 
   const egressTableCols = useMemo<TableColumnProps<ExtendedNode>[]>(() => {
@@ -155,7 +155,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
       form.setFieldsValue({
         ranges: [
           ...new Set(
-            [...rangesVal, internetRangeIpv4]
+            [...rangesVal, internetRangeIpv4],
             // .concat(network?.isipv6 ? [internetRangeIpv6] : [])
           ),
         ],
@@ -177,7 +177,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
         onCancel && onCancel(ev);
       }}
       footer={null}
-      className="CustomModal"
+      className="CustomModal AddEgressModal"
       style={{ minWidth: '50vw' }}
     >
       <Divider style={{ margin: '0px 0px 2rem 0px' }} />
@@ -189,6 +189,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
               name={idFormField}
               rules={[{ required: true }]}
               style={{ marginBottom: '0px' }}
+              data-nmui-intercom="add-egress-form_host"
             >
               {!selectedEgress && (
                 <Select
@@ -201,6 +202,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
                             placeholder="Search host"
                             value={egressSearch}
                             onChange={(e) => setEgressSearch(e.target.value)}
+                            prefix={<SearchOutlined />}
                           />
                         </Col>
                       </Row>
@@ -255,7 +257,12 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
 
           <Divider style={{ margin: '0px 0px 2rem 0px' }} />
           <div className="CustomModalBody">
-            <Form.Item name="natEnabled" label="Enable NAT for egress traffic" valuePropName="checked">
+            <Form.Item
+              name="natEnabled"
+              label="Enable NAT for egress traffic"
+              valuePropName="checked"
+              data-nmui-intercom="add-egress-form_natEnabled"
+            >
               <Switch />
             </Form.Item>
             {!natEnabledVal && (
@@ -267,7 +274,12 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
 
             <Typography.Title level={4}>Select external ranges</Typography.Title>
 
-            <Form.Item name="isInternetGateway" label="Internet Gateway" valuePropName="checked">
+            <Form.Item
+              name="isInternetGateway"
+              label="Internet Gateway"
+              valuePropName="checked"
+              data-nmui-intercom="add-egress-form_isInternetGateway"
+            >
               <Switch />
             </Form.Item>
 
@@ -283,6 +295,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
                   },
                 },
               ]}
+              data-nmui-intercom="add-egress-form_ranges"
             >
               {(fields, { add, remove }, { errors }) => (
                 <>
@@ -313,7 +326,7 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
                         <Input
                           placeholder="CIDR range (eg: 10.0.0.0/8 or a123:4567::/16)"
                           style={{ width: '100%' }}
-                          suffix={
+                          prefix={
                             <Tooltip title="Remove">
                               <CloseOutlined onClick={() => remove(index)} />
                             </Tooltip>
@@ -323,7 +336,11 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
                     </Form.Item>
                   ))}
                   <Form.Item>
-                    <Button onClick={() => add()} icon={<PlusOutlined />}>
+                    <Button
+                      onClick={() => add()}
+                      icon={<PlusOutlined />}
+                      data-nmui-intercom="add-egress-form_addrangebtn"
+                    >
                       Add range
                     </Button>
                     <Form.ErrorList errors={errors} />
@@ -337,7 +354,12 @@ export default function AddEgressModal({ isOpen, onCreateEgress, onCancel, netwo
         <div className="CustomModalBody">
           <Row>
             <Col xs={24} style={{ textAlign: 'right' }}>
-              <Button type="primary" onClick={createEgress} loading={isSubmitting}>
+              <Button
+                type="primary"
+                onClick={createEgress}
+                loading={isSubmitting}
+                data-nmui-intercom="add-egress-form_submitbtn"
+              >
                 Create Egress
               </Button>
             </Col>

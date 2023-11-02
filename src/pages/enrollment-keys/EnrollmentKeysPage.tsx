@@ -4,7 +4,7 @@ import { EnrollmentKey } from '@/models/EnrollmentKey';
 import { EnrollmentKeysService } from '@/services/EnrollmentKeysService';
 import { isEnrollmentKeyValid } from '@/utils/EnrollmentKeysUtils';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
-import { DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
@@ -27,9 +27,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageProps } from '../../models/Page';
 
 import './EnrollmentKeysPage.scss';
+import { useBranding } from '@/utils/Utils';
 
 export default function EnrollmentKeysPage(props: PageProps) {
   const [notify, notifyCtx] = notification.useNotification();
+  const branding = useBranding();
 
   const [keys, setKeys] = useState<EnrollmentKey[]>([]);
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
@@ -58,7 +60,7 @@ export default function EnrollmentKeysPage(props: PageProps) {
         },
       });
     },
-    [notify]
+    [notify],
   );
 
   const openKeyDetails = useCallback((key: EnrollmentKey) => {
@@ -132,7 +134,7 @@ export default function EnrollmentKeysPage(props: PageProps) {
       keys.filter((key) => {
         return key.tags.join('').concat(key.networks.join('')).toLowerCase().includes(searchText.toLowerCase());
       }),
-    [keys, searchText]
+    [keys, searchText],
   );
 
   const loadEnrollmentKeys = useCallback(async () => {
@@ -184,8 +186,8 @@ export default function EnrollmentKeysPage(props: PageProps) {
                 <Card className="header-card" style={{ height: '20rem', position: 'absolute', width: '100%' }}>
                   <Typography.Title level={3}>Add a Key</Typography.Title>
                   <Typography.Text>
-                    Use enrollment keys to connect hosts (netclients) to your Netmaker networks or register them to your
-                    Netmaker server.
+                    Use enrollment keys to connect hosts (netclients) to your {branding.productName} networks or
+                    register them to your {branding.productName} server.
                   </Typography.Text>
                   <Row style={{ marginTop: 'auto' }}>
                     <Col>
@@ -252,6 +254,7 @@ export default function EnrollmentKeysPage(props: PageProps) {
                   placeholder="Search keys"
                   value={searchText}
                   onChange={(ev) => setSearchText(ev.target.value)}
+                  prefix={<SearchOutlined />}
                 />
               </Col>
               <Col xs={12} md={6} style={{ textAlign: 'right' }}>

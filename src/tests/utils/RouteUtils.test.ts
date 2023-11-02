@@ -20,19 +20,17 @@ const testHost: Host = {
   isstatic: false,
   listenport: 0,
   localrange: '',
-  locallistenport: 0,
-  proxy_listen_port: 0,
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
   publickey: '',
   macaddress: '',
-  internetgateway: '',
   nodes: [],
-  proxy_enabled: false,
   isdefault: false,
   nat_type: '',
+  persistentkeepalive: 0,
+  autoupdate: false,
 };
 
 const testNetwork: Network = {
@@ -64,7 +62,7 @@ describe('RouteUtils', () => {
     expect(getHostRoute(testHost.id)).toEqual('/hosts/test-host');
     expect(getHostRoute(testHost.id, { edit: 'true' })).toEqual('/hosts/test-host?edit=true');
     expect(getHostRoute(testHost.id, { edit: 'true' }, { open: 'true' })).toEqual(
-      '/hosts/test-host?edit=true&open=true'
+      '/hosts/test-host?edit=true&open=true',
     );
   });
 
@@ -97,7 +95,12 @@ describe('RouteUtils', () => {
 
   it('returns url withour query params', () => {
     const testUrl = 'http://example.com';
+    const testUrl2 = 'http://example.com/v1';
+    const testUrl3 = 'http://example.com/v1/nets';
     expect(deriveUrlWithoutQueryParams(testUrl)).toEqual(testUrl);
+    expect(deriveUrlWithoutQueryParams(testUrl2)).toEqual(testUrl2);
+    expect(deriveUrlWithoutQueryParams(testUrl3)).toEqual(testUrl3);
+    expect(deriveUrlWithoutQueryParams(`${testUrl3}?hello=world`)).toEqual(testUrl3);
     expect(deriveUrlWithoutQueryParams(`${testUrl}?hello=world`)).toEqual(testUrl);
     expect(deriveUrlWithoutQueryParams(`${testUrl}?hello=world&foo=bar`)).toEqual(testUrl);
   });

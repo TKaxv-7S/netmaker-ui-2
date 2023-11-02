@@ -1,8 +1,8 @@
 import { Host } from '@/models/Host';
 import { AppRoutes } from '@/routes';
 import { useStore } from '@/store/store';
-import { getHostRoute } from '@/utils/RouteUtils';
-import { MoreOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { getHostRoute, resolveAppRoute } from '@/utils/RouteUtils';
+import { MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
@@ -33,6 +33,7 @@ import { Network } from '@/models/Network';
 import { HostsService } from '@/services/HostsService';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import NewHostModal from '@/components/modals/new-host-modal/NewHostModal';
+import { lt } from 'semver';
 
 export default function HostsPage(props: PageProps) {
   const [notify, notifyCtx] = notification.useNotification();
@@ -42,6 +43,7 @@ export default function HostsPage(props: PageProps) {
 
   const hosts = store.hosts;
   const storeUpdateHost = store.updateHost;
+  const storeDeleteHost = store.deleteHost;
   const storeFetchHosts = useStore((state) => state.fetchHosts);
   const storeFetchNetworks = useStore((state) => state.fetchNetworks);
   const [searchText, setSearchText] = useState('');
@@ -50,6 +52,21 @@ export default function HostsPage(props: PageProps) {
   const [hasAdvicedHosts, setHasAdvicedHosts] = useState(false);
   const [isRefreshingHosts, setIsRefreshingHosts] = useState(false);
   const [isAddNewHostModalOpen, setIsAddNewHostModalOpen] = useState(false);
+
+  const checkIfUpgradeButtonShouldBeDisabled = useCallback(
+    (host: Host) => {
+      if (store.serverConfig?.Version === undefined) {
+        return true;
+      }
+
+      if (lt(host.version, store.serverConfig?.Version)) {
+        return false;
+      }
+
+      return true;
+    },
+    [store.serverConfig?.Version],
+  );
 
   const filteredNetworks = useMemo(() => {
     return store.networks;
@@ -60,7 +77,7 @@ export default function HostsPage(props: PageProps) {
       hosts.filter((host) => {
         return host.name.toLowerCase().includes(searchText.toLowerCase());
       }),
-    [hosts, searchText]
+    [hosts, searchText],
   );
 
   const refreshHostKeys = useCallback(
@@ -84,7 +101,31 @@ export default function HostsPage(props: PageProps) {
         },
       });
     },
-    [notify]
+    [notify],
+  );
+
+  const requestHostPull = useCallback(
+    (host: Host) => {
+      Modal.confirm({
+        title: 'Synchronise host',
+        content: `This will trigger the host (${host.name}) to pull latest network(s) state from the server. Proceed?`,
+        onOk: async () => {
+          try {
+            await HostsService.requestHostPull(host.id);
+            notify.success({
+              message: 'Host is syncing...',
+              description: `Host pull has been initiated for ${host.name}. This may take a while.`,
+            });
+          } catch (err) {
+            notify.error({
+              message: 'Failed to synchronise host',
+              description: extractErrorMsg(err as any),
+            });
+          }
+        },
+      });
+    },
+    [notify],
   );
 
   const confirmToggleHostDefaultness = useCallback(
@@ -106,14 +147,56 @@ export default function HostsPage(props: PageProps) {
         },
       });
     },
-    [notify, storeUpdateHost]
+    [notify, storeUpdateHost],
   );
 
   const onEditHost = useCallback(
     (host: Host) => {
       navigate(getHostRoute(host, { edit: 'true' }));
     },
-    [navigate]
+    [navigate],
+  );
+
+  const confirmDeleteHost = useCallback(
+    async (host: Host) => {
+      const assocNodes = store.nodes.filter((node) => node.hostid === host.id);
+
+      Modal.confirm({
+        title: 'Delete host',
+        content: (
+          <>
+            <Row>
+              <Col xs={24}>
+                <Typography.Text>Are you sure you want to delete this host {host.name}?</Typography.Text>
+              </Col>
+              {assocNodes.length > 0 && (
+                <Col xs={24}>
+                  <Typography.Text color="warning">Host will be removed from the following networks:</Typography.Text>
+                  <ul>
+                    {assocNodes.map((node) => (
+                      <li key={node.id}>{node.network}</li>
+                    ))}
+                  </ul>
+                </Col>
+              )}
+            </Row>
+          </>
+        ),
+        onOk: async () => {
+          try {
+            await HostsService.deleteHost(host.id, true);
+            storeDeleteHost(host.id);
+            notify.success({ message: `Host ${host.name} deleted` });
+          } catch (err) {
+            notify.error({
+              message: 'Failed to delete host',
+              description: extractErrorMsg(err as any),
+            });
+          }
+        },
+      });
+    },
+    [notify, store.nodes, storeDeleteHost],
   );
 
   const refreshAllHostKeys = useCallback(() => {
@@ -139,6 +222,37 @@ export default function HostsPage(props: PageProps) {
       },
     });
   }, [notify]);
+
+  const confirmUpgradeClient = useCallback(
+    async (host: Host) => {
+      Modal.confirm({
+        title: 'Upgrade host version',
+        content: (
+          <>
+            <Row>
+              <Col xs={24}>
+                <Typography.Text>
+                  Are you sure you want to upgrade the version of the host {host.name} to {store.serverConfig?.Version}
+                </Typography.Text>
+              </Col>
+            </Row>
+          </>
+        ),
+        onOk: async () => {
+          try {
+            await HostsService.upgradeClientVersion(host.id);
+            notify.success({ message: `The upgrade has been triggered and it may take a while` });
+          } catch (err) {
+            notify.error({
+              message: 'Failed to upgrade client version',
+              description: extractErrorMsg(err as any),
+            });
+          }
+        },
+      });
+    },
+    [notify, store.nodes],
+  );
 
   const hostsTableColumns: TableColumnsType<Host> = useMemo(
     () => [
@@ -177,36 +291,6 @@ export default function HostsPage(props: PageProps) {
             <Typography.Text>{version}</Typography.Text>
           </div>
         ),
-      },
-      {
-        title: 'Proxy Status',
-        dataIndex: 'proxy_enabled',
-        render(value, host) {
-          return (
-            <Switch
-              checked={value}
-              onChange={(newStatus: boolean, ev) => {
-                ev.stopPropagation();
-                Modal.confirm({
-                  title: 'Toggle proxy status',
-                  content: `Are you sure you want to turn ${newStatus ? 'on' : 'off'} proxy for host ${host.name}?`,
-                  onOk: async () => {
-                    try {
-                      const newHost = (await HostsService.updateHost(host.id, { ...host, proxy_enabled: newStatus }))
-                        .data;
-                      storeUpdateHost(host.id, newHost);
-                    } catch (err) {
-                      notify.error({
-                        message: 'Failed to update host',
-                        description: extractErrorMsg(err as any),
-                      });
-                    }
-                  },
-                });
-              }}
-            />
-          );
-        },
       },
       // {
       //   title: 'Relay status',
@@ -268,6 +352,23 @@ export default function HostsPage(props: PageProps) {
         },
       },
       {
+        title: '',
+        width: '5rem',
+        render: (_, host) => (
+          <div onClick={(ev) => ev.stopPropagation()}>
+            <Button
+              type="text"
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                requestHostPull(host);
+              }}
+            >
+              Sync
+            </Button>
+          </div>
+        ),
+      },
+      {
         width: '1rem',
         render(_, host) {
           return (
@@ -277,42 +378,45 @@ export default function HostsPage(props: PageProps) {
                 items: [
                   {
                     key: 'default',
-                    label: (
-                      <Typography.Text
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          confirmToggleHostDefaultness(host);
-                        }}
-                      >
-                        {host.isdefault ? 'Unmake default' : 'Make default'}
-                      </Typography.Text>
-                    ),
+                    label: host.isdefault ? 'Unmake default' : 'Make default',
+                    onClick: (ev) => {
+                      ev.domEvent.stopPropagation();
+                      confirmToggleHostDefaultness(host);
+                    },
                   },
                   {
                     key: 'refresh',
-                    label: (
-                      <Typography.Text
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          refreshHostKeys(host);
-                        }}
-                      >
-                        Refresh Host Keys
-                      </Typography.Text>
-                    ),
+                    label: 'Refresh Host Keys',
+                    onClick: (ev) => {
+                      ev.domEvent.stopPropagation();
+                      refreshHostKeys(host);
+                    },
                   },
                   {
                     key: 'edit',
-                    label: (
-                      <Typography.Text
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          onEditHost(host);
-                        }}
-                      >
-                        Edit Host
-                      </Typography.Text>
-                    ),
+                    label: 'Edit Host',
+                    onClick: (ev) => {
+                      ev.domEvent.stopPropagation();
+                      onEditHost(host);
+                    },
+                  },
+                  {
+                    key: 'upgrade',
+                    label: 'Upgrade Version',
+                    disabled: checkIfUpgradeButtonShouldBeDisabled(host),
+                    onClick: (ev) => {
+                      ev.domEvent.stopPropagation();
+                      confirmUpgradeClient(host);
+                    },
+                  },
+                  {
+                    key: 'delete',
+                    label: 'Delete Host',
+                    danger: true,
+                    onClick: (ev) => {
+                      ev.domEvent.stopPropagation();
+                      confirmDeleteHost(host);
+                    },
                   },
                 ] as MenuProps['items'],
               }}
@@ -323,7 +427,7 @@ export default function HostsPage(props: PageProps) {
         },
       },
     ],
-    [confirmToggleHostDefaultness, notify, onEditHost, refreshHostKeys, store.nodes, storeUpdateHost]
+    [confirmToggleHostDefaultness, confirmDeleteHost, onEditHost, refreshHostKeys, store.nodes],
   );
 
   const namHostsTableCols: TableColumnsType<Host> = useMemo(
@@ -387,7 +491,7 @@ export default function HostsPage(props: PageProps) {
         },
       },
     ],
-    [confirmToggleHostDefaultness, onEditHost]
+    [confirmToggleHostDefaultness, onEditHost],
   );
 
   const networksTableCols: TableColumnsType<Network> = useMemo(
@@ -413,7 +517,7 @@ export default function HostsPage(props: PageProps) {
             title: 'Connection Status',
             render(_: any, network: Network) {
               const isConnected = store.nodes.some(
-                (node) => node.network === network.netid && node.hostid === selectedHost.id
+                (node) => node.network === network.netid && node.hostid === selectedHost.id,
               );
               return (
                 <Switch
@@ -429,7 +533,7 @@ export default function HostsPage(props: PageProps) {
                           await HostsService.updateHostsNetworks(
                             selectedHost.id,
                             network.netid,
-                            isConnected ? 'leave' : 'join'
+                            isConnected ? 'leave' : 'join',
                           );
                           notify.success({
                             message: `Host successfully ${
@@ -453,7 +557,7 @@ export default function HostsPage(props: PageProps) {
           }
         : {},
     ],
-    [notify, selectedHost, store.nodes]
+    [notify, selectedHost, store.nodes],
   );
 
   // ui components
@@ -554,7 +658,7 @@ export default function HostsPage(props: PageProps) {
         children: getNetworkAccessContent(),
       },
     ],
-    [getOverviewContent, getNetworkAccessContent]
+    [getOverviewContent, getNetworkAccessContent],
   );
 
   useEffect(() => {
@@ -659,7 +763,7 @@ export default function HostsPage(props: PageProps) {
                   <Typography.Text>
                     If a host is already registered with the server, you can add it into any network directly from the
                     dashboard. Simply go to Network Access Management tab under the{' '}
-                    <Link to={AppRoutes.HOSTS_ROUTE}>Hosts page</Link>.
+                    <Link to={resolveAppRoute(AppRoutes.HOSTS_ROUTE)}>Hosts page</Link>.
                   </Typography.Text>
                 </Card>
               </Col>
@@ -681,6 +785,7 @@ export default function HostsPage(props: PageProps) {
                   placeholder="Search hosts"
                   value={searchText}
                   onChange={(ev) => setSearchText(ev.target.value)}
+                  prefix={<SearchOutlined />}
                 />
               </Col>
               <Col xs={12} md={6} style={{ textAlign: 'right' }}>
@@ -714,7 +819,7 @@ export default function HostsPage(props: PageProps) {
         isOpen={isAddNewHostModalOpen}
         onFinish={() => {
           setIsAddNewHostModalOpen(false);
-          navigate(AppRoutes.HOSTS_ROUTE);
+          navigate(resolveAppRoute(AppRoutes.HOSTS_ROUTE));
         }}
         onCancel={() => setIsAddNewHostModalOpen(false)}
       />
