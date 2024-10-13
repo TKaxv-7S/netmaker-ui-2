@@ -1,4 +1,7 @@
+import { Node } from '@/models/Node';
+
 export interface CreateIngressNodeDto {
-  failover: boolean;
-  extclientdns: string;
+  extclientdns: Node['ingressdns'];
+  is_internet_gw: Node['isinternetgateway'];
+  metadata: Node['metadata'];
 }

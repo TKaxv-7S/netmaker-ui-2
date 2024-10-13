@@ -27,7 +27,6 @@ const testNode: Node = {
   dnson: false,
   islocal: false,
   server: '',
-  internetgateway: '',
   defaultacl: '',
   connected: false,
   failover: false,
@@ -36,13 +35,24 @@ const testNode: Node = {
   autoupdate: false,
   isrelay: false,
   isrelayed: false,
+  isinternetgateway: false,
+  is_fail_over: false,
+  failed_over_by: '',
+  fail_over_peers: [],
+  internetgw_node_id: '',
+  inet_node_req: {
+    inet_node_client_ids: [],
+  },
+  additional_rag_ips: [],
 };
 
 const hostRegistry: Record<Host['id'], HostCommonDetails> = {
   'test-host': {
     endpointip: '1.2.3.4',
+    endpointipv6: 'fd00::2.3.4',
     interfaces: [],
-    isstatic: false,
+    isstaticendpoint: false,
+    isstaticport: false,
     listenport: 0,
     macaddress: '',
     mtu: 0,
@@ -50,6 +60,7 @@ const hostRegistry: Record<Host['id'], HostCommonDetails> = {
     os: '',
     publickey: '',
     version: '',
+    firewallinuse: '',
   },
 };
 

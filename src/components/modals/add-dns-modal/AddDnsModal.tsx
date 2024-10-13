@@ -1,5 +1,5 @@
 import { AutoComplete, Button, Col, Divider, Form, Input, Modal, notification, Row } from 'antd';
-import { MouseEvent, useMemo, useState } from 'react';
+import { MouseEvent, Ref, useMemo, useState } from 'react';
 import { NetworksService } from '@/services/NetworksService';
 import { useStore } from '@/store/store';
 import '../CustomModal.scss';
@@ -9,7 +9,6 @@ import { DNS } from '@/models/Dns';
 import { Node } from '@/models/Node';
 import { isValidIpv4OrCidr, isValidIpv6OrCidr, truncateIpFromCidr } from '@/utils/NetworkUtils';
 import { getExtendedNode } from '@/utils/NodeUtils';
-import { Rule } from 'antd/es/form';
 
 interface AddDnsModalProps {
   isOpen: boolean;
@@ -18,9 +17,18 @@ interface AddDnsModalProps {
   closeModal?: () => void;
   onOk?: (e: MouseEvent<HTMLButtonElement>) => void;
   onCancel?: (e: MouseEvent<HTMLButtonElement>) => void;
+  addDNSModalDNSNameRef: Ref<HTMLDivElement>;
+  addDNSModalAddressToAliasRef: Ref<HTMLDivElement>;
 }
 
-export default function AddDnsModal({ isOpen, onCreateDns, onCancel, networkId }: AddDnsModalProps) {
+export default function AddDnsModal({
+  isOpen,
+  onCreateDns,
+  onCancel,
+  networkId,
+  addDNSModalAddressToAliasRef,
+  addDNSModalDNSNameRef,
+}: AddDnsModalProps) {
   const [form] = Form.useForm<DNS & { ip: string }>();
   const [notify, notifyCtx] = notification.useNotification();
   const store = useStore();
@@ -30,10 +38,13 @@ export default function AddDnsModal({ isOpen, onCreateDns, onCancel, networkId }
     () =>
       store.nodes
         .filter((node) => node.network === networkId)
-        .map((node) => ({
-          label: `${node.address}, ${node.address6} (${getExtendedNode(node, store.hostsCommonDetails)?.name ?? ''})`,
-          value: node.address ?? node.address6 ?? '',
-        })),
+        .map((node) => {
+          const addrs = ([] as Array<string>).concat(node.address || [], node.address6 || []).join(', ');
+          return {
+            label: `${addrs} (${getExtendedNode(node, store.hostsCommonDetails)?.name ?? ''})`,
+            value: node.address ?? node.address6 ?? '',
+          };
+        }),
     [networkId, store.hostsCommonDetails, store.nodes],
   );
 
@@ -70,22 +81,6 @@ export default function AddDnsModal({ isOpen, onCreateDns, onCancel, networkId }
     }
   };
 
-  const validateUrl = (_: any, value: string) => {
-    /* eslint-disable */
-    const regex = /^[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,6}$/; // Regular expression for url validation
-  
-    if (regex.test(value)) {
-      return Promise.resolve();
-    } else {
-      return Promise.reject("Please enter a valid URL.");
-    }
-  };
-
-  const validateUrlInput: Rule[] = [
-    { required: true, message: "Please enter a value." },
-    { validator: validateUrl },
-  ];
-
   return (
     <Modal
       title={<span style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Create a DNS Entry</span>}
@@ -101,18 +96,30 @@ export default function AddDnsModal({ isOpen, onCreateDns, onCancel, networkId }
       <Divider style={{ margin: '0px 0px 2rem 0px' }} />
       <div className="CustomModalBody">
         <Form name="add-dns-form" form={form} layout="vertical">
-          <Form.Item label="DNS name" name="name" rules={validateUrlInput} data-nmui-intercom="add-dns-form_name">
-            <Input placeholder="myserver.example.com" />
-          </Form.Item>
-
-          <Form.Item
-            label="Address to alias"
-            name="ip"
-            rules={[{ required: true }]}
-            data-nmui-intercom="add-dns-form_ip"
-          >
-            <AutoComplete options={nodeOptions} style={{ width: '100%' }} placeholder="Address" />
-          </Form.Item>
+          <Row>
+            <Col xs={24} ref={addDNSModalDNSNameRef}>
+              <Form.Item
+                label="DNS name"
+                name="name"
+                rules={[{ required: true, whitespace: true }]}
+                data-nmui-intercom="add-dns-form_name"
+              >
+                <Input placeholder="myserver.example.com" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row>
+            <Col xs={24} ref={addDNSModalAddressToAliasRef}>
+              <Form.Item
+                label="Address to alias"
+                name="ip"
+                rules={[{ required: true }]}
+                data-nmui-intercom="add-dns-form_ip"
+              >
+                <AutoComplete options={nodeOptions} style={{ width: '100%' }} placeholder="Address" />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Row>
             <Col xs={24} style={{ textAlign: 'right' }}>

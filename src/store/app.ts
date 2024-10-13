@@ -2,6 +2,7 @@ import { ServerConfig, ServerStatus } from '@/models/ServerConfig';
 import { StateCreator } from 'zustand';
 import { AvailableThemes } from '../models/AvailableThemes';
 import { ServerConfigService } from '@/services/ServerConfigService';
+import { SIDE_NAV_EXPANDED_WIDTH } from '@/layouts/MainLayout';
 
 export interface IAppSlice {
   currentTheme: AvailableThemes;
@@ -9,6 +10,8 @@ export interface IAppSlice {
   serverName: string;
   serverStatus: { status: ServerStatus | null; isHealthy: boolean };
   serverConfig: ServerConfig | null;
+  isSidebarCollapsed: boolean;
+  sidebarWidth: string;
 
   // methods
   setCurrentTheme: (theme: AvailableThemes) => void;
@@ -16,6 +19,8 @@ export interface IAppSlice {
   setServerName: (name: string) => void;
   setServerStatus: (status: ServerStatus) => void;
   fetchServerConfig: () => Promise<[Boolean, ServerConfig | null]>; // eslint-disable-line @typescript-eslint/ban-types
+  setIsSidebarCollapsed: (isCollapsed: boolean) => void;
+  setSidebarWidth: (width: string) => void;
 }
 
 const createAppSlice: StateCreator<IAppSlice, [], [], IAppSlice> = (set) => ({
@@ -24,6 +29,8 @@ const createAppSlice: StateCreator<IAppSlice, [], [], IAppSlice> = (set) => ({
   serverName: '',
   serverStatus: { status: null, isHealthy: true },
   serverConfig: null,
+  isSidebarCollapsed: false,
+  sidebarWidth: SIDE_NAV_EXPANDED_WIDTH,
 
   setCurrentTheme: (theme) => set(() => ({ currentTheme: theme })),
   setLogoUrl: (url) => set(() => ({ logoUrl: url })),
@@ -32,7 +39,7 @@ const createAppSlice: StateCreator<IAppSlice, [], [], IAppSlice> = (set) => ({
     set(() => ({
       serverStatus: {
         status,
-        isHealthy: status.broker_connected && status.db_connected && status.healthyNetwork && !status.license_error,
+        isHealthy: status.db_connected && status.healthyNetwork && !status.license_error, // not checking broker status here because of mq fallback mechanism between netmaker and netclient
       },
     })),
   fetchServerConfig: async () => {
@@ -45,6 +52,8 @@ const createAppSlice: StateCreator<IAppSlice, [], [], IAppSlice> = (set) => ({
       return Promise.reject([false, null]);
     }
   },
+  setIsSidebarCollapsed: (isCollapsed) => set(() => ({ isSidebarCollapsed: isCollapsed })),
+  setSidebarWidth: (width) => set(() => ({ sidebarWidth: width })),
 });
 
 export const AppSlice = {

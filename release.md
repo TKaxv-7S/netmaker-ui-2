@@ -1,15 +1,18 @@
 # Netmaker UI release notes
 
-## Netmaker UI v0.21.2
+## Netmaker UI v0.25.0
 
 ## Whats New
-- Introduced a toggle button for the host auto-update setting in the global host configuration.
-- Introduced functionality to designate a host as a relay for a specific enrollment key.
+
+- Revamped User Management. This addition simplifies user administration by allowing admins to create and control user access based on their roles. Users can also be grouped for easier management.
+- A more helpful dashboard. Users can now see the status of their networks and resources at a glance.
+- Fix ephemeral data leak between users. Now, users will only see the resources they have access to.
 
 ## What's Fixed/Improvements
-- Resolved an issue with the notification message display following the deletion of a client and egress gateway.
-- Corrected the presentation of relayed clients on metrics.
-- Fixed an issue where it was not possible to re-add a relay after its removal.
 
-## Known Issues
+- Minor UI/UX bug fixes and improvements
+
+## Known issues
+
 - Graph page crashed when WebGL is not enabled. WebGL is required for the graph page to work.
+- CPU usage is unnecessarily high when a network is opened.

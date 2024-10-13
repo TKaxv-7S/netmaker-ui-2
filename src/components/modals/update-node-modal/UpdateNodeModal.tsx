@@ -5,7 +5,6 @@ import {
   Divider,
   Form,
   Input,
-  InputNumber,
   Modal,
   notification,
   Row,
@@ -13,17 +12,20 @@ import {
   Switch,
   Typography,
 } from 'antd';
-import { MouseEvent } from 'react';
+import { MouseEvent, useCallback, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import '../CustomModal.scss';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
-import { Host } from '@/models/Host';
 import { Node } from '@/models/Node';
 import { getHostRoute } from '@/utils/RouteUtils';
 import { NodesService } from '@/services/NodesService';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { NODE_EXP_TIME_FORMAT } from '@/constants/AppConstants';
+import { WarningOutlined } from '@ant-design/icons';
+import { getExtendedNode } from '@/utils/NodeUtils';
+import { NULL_NODE } from '@/constants/Types';
+import { useServerLicense } from '@/utils/Utils';
 
 interface UpdateNodeModalProps {
   isOpen: boolean;
@@ -36,27 +38,55 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
   const [form] = Form.useForm<Node>();
   const store = useStore();
   const navigate = useNavigate();
-
   const storeUpdateNode = store.updateNode;
-  const isStaticVal: Host['isstatic'] = Form.useWatch('isstatic', form);
+  const { isServerEE } = useServerLicense();
+
+  const [isLoading, setIsLoading] = useState(false);
 
   const network = store.networks.find((n) => n.netid === node.network);
   const host = store.hosts.find((h) => h.id === node.hostid);
+
+  const currentFailover = useMemo<Node | undefined>(
+    () => store.nodes.find((n) => n.network === node.network && n.is_fail_over),
+    [node.network, store.nodes],
+  );
+  const failoverVal: boolean = form.getFieldValue('is_fail_over');
 
   const resetModal = () => {
     form.resetFields();
   };
 
-  const updateNode = async () => {
+  const updateNode = useCallback(async () => {
     try {
       const formData = await form.validateFields();
       const newNode = (
         await NodesService.updateNode(node.id, node.network, {
           ...node,
           ...formData,
+          is_fail_over: node.is_fail_over, // override this, as it is handles by a separate API call
           expdatetime: Math.floor(new Date(formData.expdatetime).getTime() / 1000),
         })
       ).data;
+      if (failoverVal && currentFailover?.id !== node.id) {
+        try {
+          currentFailover && (await NodesService.removeNodeFailoverStatus(currentFailover.id));
+          await NodesService.setNodeAsFailover(newNode.id);
+        } catch (err) {
+          notification.error({
+            message: 'Failed to set network failover',
+            description: extractErrorMsg(err as any),
+          });
+        }
+      } else if (!failoverVal && currentFailover?.id === node.id) {
+        try {
+          await NodesService.removeNodeFailoverStatus(newNode.id);
+        } catch (err) {
+          notification.error({
+            message: 'Failed to remove network failover status',
+            description: extractErrorMsg(err as any),
+          });
+        }
+      }
       notification.success({ message: `Host ${node.id} updated` });
       storeUpdateNode(newNode.id, newNode);
       onUpdateNode(newNode);
@@ -66,7 +96,7 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
         description: extractErrorMsg(err as any),
       });
     }
-  };
+  }, [currentFailover, failoverVal, form, node, onUpdateNode, storeUpdateNode]);
 
   const disabledDateTime = () => ({
     disabledMinutes: () => Array.from({ length: 60 }, (_, i) => i + 1),
@@ -95,18 +125,25 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
         name="update-node-form"
         form={form}
         layout="vertical"
-        initialValues={{ ...node, expdatetime: dayjs(node.expdatetime * 1000), endpointip: host?.endpointip ?? '' }}
+        initialValues={{
+          ...node,
+          expdatetime: dayjs(node.expdatetime * 1000),
+          endpointip: host?.endpointip ?? '',
+          endpointipv6: host?.endpointipv6 ?? '',
+        }}
       >
         <div className="scrollable-modal-body">
           <div className="CustomModalBody">
-            <Form.Item
-              label="IP Address (IPv4)"
-              name="address"
-              rules={[{ required: true }]}
-              data-nmui-intercom="update-node-form_address"
-            >
-              <Input placeholder="IPv4 address" />
-            </Form.Item>
+            {network?.isipv4 && (
+              <Form.Item
+                label="IP Address (IPv4)"
+                name="address"
+                rules={[{ required: true }]}
+                data-nmui-intercom="update-node-form_address"
+              >
+                <Input placeholder="IPv4 address" />
+              </Form.Item>
+            )}
 
             {network?.isipv6 && (
               <Form.Item
@@ -128,6 +165,7 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
                     value: iface.addressString,
                   })) ?? []
                 }
+                disabled={true}
               />
             </Form.Item>
 
@@ -141,22 +179,17 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
                 showTime={true}
                 disabledTime={disabledDateTime}
                 style={{ width: '100%' }}
-                clearIcon={false}
+                allowClear={false}
                 format={NODE_EXP_TIME_FORMAT}
               />
             </Form.Item>
 
-            <Form.Item
-              label="Endpoint IP"
-              name="endpointip"
-              rules={[{ required: isStaticVal }]}
-              data-nmui-intercom="update-node-form_endpointip"
-            >
-              <Input
-                placeholder="Endpoint IP"
-                disabled={!isStaticVal}
-                title="To edit, click Global Host Settings below"
-              />
+            <Form.Item label="Endpoint IP (IPv4)" name="endpointip" data-nmui-intercom="update-node-form_endpointip">
+              <Input placeholder="Endpoint IP" disabled title="To edit, click Global Host Settings below" />
+            </Form.Item>
+
+            <Form.Item label="Endpoint IP (IPv6)" name="endpointipv6" data-nmui-intercom="update-node-form_endpointip">
+              <Input placeholder="Endpoint IP" disabled title="To edit, click Global Host Settings below" />
             </Form.Item>
 
             <Form.Item
@@ -194,6 +227,45 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
             >
               <Switch />
             </Form.Item>
+
+            {isServerEE && (
+              <Form.Item
+                label={
+                  <>
+                    <span>Network Failover</span>
+                    <WarningOutlined
+                      style={{
+                        color: 'red',
+                        marginLeft: '0.5rem',
+                        display: failoverVal && currentFailover && currentFailover?.id !== node.id ? 'inline' : 'none',
+                      }}
+                      title={`Setting this will stop ${(getExtendedNode(currentFailover || NULL_NODE, store.hostsCommonDetails).name || currentFailover?.id) ?? ''} from being the network failover.`}
+                    />
+                  </>
+                }
+                name="is_fail_over"
+                valuePropName="checked"
+                data-nmui-intercom="update-node-form_failover"
+              >
+                <Switch
+                  onChange={() => {
+                    setIsLoading(true);
+                    setTimeout(() => {
+                      setIsLoading(false);
+                    }, 3000);
+                  }}
+                />
+              </Form.Item>
+            )}
+
+            <Form.Item
+              label="Metadata"
+              name="metadata"
+              data-nmui-intercom="update-node-form_metadata"
+              rules={[{ max: 255 }]}
+            >
+              <Input placeholder="Metadata" />
+            </Form.Item>
           </div>
         </div>
         <Divider style={{ margin: '0px 0px 2rem 0px' }} />
@@ -209,7 +281,7 @@ export default function UpdateNodeModal({ isOpen, node, onUpdateNode, onCancel }
             </Col>
             <Col xs={12} style={{ textAlign: 'right' }}>
               <Form.Item noStyle data-nmui-intercom="update-node-form_submit">
-                <Button type="primary" onClick={updateNode}>
+                <Button type="primary" onClick={updateNode} loading={isLoading}>
                   Update Host
                 </Button>
               </Form.Item>

@@ -13,12 +13,14 @@ export const stubHost1: Host = {
   os: 'linux',
   debug: false,
   isstatic: false,
+  isstaticport: false,
   listenport: 0,
   localrange: '',
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
+  endpointipv6: '',
   publickey: '',
   macaddress: '',
   nodes: [],
@@ -37,12 +39,14 @@ export const stubHost2: Host = {
   os: '',
   debug: false,
   isstatic: false,
+  isstaticport: false,
   listenport: 0,
   localrange: '',
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
+  endpointipv6: '',
   publickey: '',
   macaddress: '',
   nodes: [],
@@ -127,7 +131,6 @@ export const stubNode1: Node = {
   dnson: false,
   islocal: false,
   server: '',
-  internetgateway: '',
   defaultacl: '',
   connected: false,
   failover: false,
@@ -135,6 +138,16 @@ export const stubNode1: Node = {
   autoupdate: false,
   isrelay: false,
   isrelayed: false,
+  isinternetgateway: false,
+  relaynodes: [],
+  is_fail_over: false,
+  failed_over_by: '',
+  fail_over_peers: [],
+  internetgw_node_id: '',
+  inet_node_req: {
+    inet_node_client_ids: [],
+  },
+  additional_rag_ips: [],
 };
 
 export const stubNode2: Node = {
@@ -162,7 +175,6 @@ export const stubNode2: Node = {
   dnson: false,
   islocal: false,
   server: '',
-  internetgateway: '',
   defaultacl: '',
   connected: false,
   failover: false,
@@ -170,6 +182,15 @@ export const stubNode2: Node = {
   autoupdate: false,
   isrelay: false,
   isrelayed: false,
+  isinternetgateway: false,
+  is_fail_over: false,
+  failed_over_by: '',
+  fail_over_peers: [],
+  internetgw_node_id: '',
+  inet_node_req: {
+    inet_node_client_ids: undefined,
+  },
+  additional_rag_ips: [],
 };
 
 export const stubNodes: Node[] = [stubNode1, stubNode2];
@@ -179,6 +200,10 @@ export const stubUser1: User = {
   isadmin: true,
   issuperadmin: false,
   remote_gw_ids: null,
+  user_group_ids: {},
+  platform_role_id: '',
+  network_roles: {},
+  auth_type: 'basic_auth',
 };
 
 export const stubUser2: User = {
@@ -186,6 +211,10 @@ export const stubUser2: User = {
   isadmin: false,
   issuperadmin: false,
   remote_gw_ids: null,
+  user_group_ids: {},
+  platform_role_id: '',
+  network_roles: {},
+  auth_type: 'oauth',
 };
 
 export const stubUsers: User[] = [stubUser1, stubUser2];

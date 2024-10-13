@@ -10,12 +10,14 @@ export interface Host {
   os: string;
   debug: boolean;
   isstatic: boolean;
+  isstaticport: boolean;
   listenport: number;
   localrange: string;
   mtu: number;
   interfaces: Interface[];
   defaultinterface: string; // iface name
   endpointip: string;
+  endpointipv6: string;
   publickey: string;
   macaddress: string;
   nodes: Node['id'][];
@@ -29,11 +31,14 @@ export interface HostCommonDetails {
   name: Host['name'];
   version: Host['version'];
   endpointip: Host['endpointip'];
+  endpointipv6: Host['endpointipv6'];
   publickey: Host['publickey'];
   os: Host['os'];
   listenport: Host['listenport'];
-  isstatic: Host['isstatic'];
+  isstaticendpoint: Host['isstatic'];
+  isstaticport: Host['isstaticport'];
   mtu: Host['mtu'];
   interfaces: Host['interfaces'];
   macaddress: Host['macaddress'];
+  firewallinuse: Host['firewallinuse'];
 }

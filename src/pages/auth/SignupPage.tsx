@@ -65,12 +65,9 @@ export default function SignupPage(props: SignupPageProps) {
       <Layout style={{ height: '100%', minHeight: '100vh', justifyContent: 'center', alignItems: 'center' }}>
         <Layout.Content
           style={{
-            marginTop: '15vh',
-            position: 'relative',
-            height: 'fit-content',
-            width: '40%',
             padding: props.isFullScreen ? 0 : 24,
           }}
+          className="auth-page-container"
         >
           <Row>
             <Col xs={24}>
@@ -98,7 +95,21 @@ export default function SignupPage(props: SignupPageProps) {
                 prefix={<LockOutlined />}
               />
             </Form.Item>
-            <Form.Item name="confirm-password" label={t('signin.confirm-password')} rules={[{ required: true }]}>
+            <Form.Item
+              name="confirm-password"
+              label={t('signin.confirm-password')}
+              rules={[
+                { required: true },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('Passwords must match'));
+                  },
+                }),
+              ]}
+            >
               <Input
                 placeholder={String(t('signin.confirm-password'))}
                 type="password"

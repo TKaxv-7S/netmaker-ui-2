@@ -1,7 +1,16 @@
 import { StateCreator } from 'zustand';
 import { TenantConfig } from '../models/ServerConfig';
-import { User } from '@/models/User';
-import { isSaasBuild } from '@/services/BaseService';
+import { User, UserRole } from '@/models/User';
+import {
+  NMUI_ACCESS_TOKEN_LOCALSTORAGE_KEY,
+  NMUI_AMUI_USER_ID_LOCALSTORAGE_KEY,
+  NMUI_BASE_URL_LOCALSTORAGE_KEY,
+  NMUI_TENANT_ID_LOCALSTORAGE_KEY,
+  NMUI_TENANT_NAME_LOCALSTORAGE_KEY,
+  NMUI_USERNAME_LOCALSTORAGE_KEY,
+  NMUI_USER_LOCALSTORAGE_KEY,
+  NMUI_USER_PLATFORM_ROLE_LOCALSTORAGE_KEY,
+} from '@/services/BaseService';
 import { isValidJwt } from '@/utils/Utils';
 
 export interface IAuthSlice {
@@ -14,10 +23,12 @@ export interface IAuthSlice {
   amuiAuthToken: TenantConfig['amuiAuthToken'];
   amuiUserId: TenantConfig['amuiUserId'];
   user: User | null;
+  userPlatformRole: UserRole | null;
+  isNewTenant: TenantConfig['isNewTenant'];
 
   // methods
   isLoggedIn: () => boolean;
-  setStore: (config: Partial<TenantConfig & { user: User }>) => void;
+  setStore: (config: Partial<TenantConfig & { user: User; userPlatformRole: UserRole }>) => void;
   logout: () => void;
 }
 
@@ -31,10 +42,12 @@ const createAuthSlice: StateCreator<IAuthSlice, [], [], IAuthSlice> = (set, get)
   amuiAuthToken: '',
   amuiUserId: '',
   user: null,
+  isNewTenant: false,
+  userPlatformRole: null,
 
   isLoggedIn() {
     // TODO: fix username retrieval for SaaS
-    return !!get().jwt && isValidJwt(get().jwt || '') && (!isSaasBuild ? !!get().user : true);
+    return !!get().baseUrl && !!get().jwt && isValidJwt(get().jwt || '') && !!get().user && !!get().userPlatformRole;
   },
   setStore(config) {
     set(config);
@@ -49,7 +62,18 @@ const createAuthSlice: StateCreator<IAuthSlice, [], [], IAuthSlice> = (set, get)
       amuiAuthToken: '',
       amuiUserId: '',
       user: null,
+      userPlatformRole: null,
     });
+    window?.localStorage?.removeItem(NMUI_ACCESS_TOKEN_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_USERNAME_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_BASE_URL_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_TENANT_ID_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_TENANT_NAME_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_AMUI_USER_ID_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_USER_LOCALSTORAGE_KEY);
+    window?.localStorage?.removeItem(NMUI_USER_PLATFORM_ROLE_LOCALSTORAGE_KEY);
+    // TODO: consider using localStorage.clear()
+    // window?.localStorage?.clear();
   },
 });
 

@@ -7,22 +7,10 @@ import { useStore } from '@/store/store';
 import { Modify } from '@/types/react-app-env';
 import { getExtendedNode, isNodeRelay } from '@/utils/NodeUtils';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
-import {
-  Button,
-  Col,
-  DatePicker,
-  Divider,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Radio,
-  Row,
-  Select,
-  notification,
-} from 'antd';
+import { useServerLicense } from '@/utils/Utils';
+import { Button, Col, Divider, Form, Input, Modal, Row, Select, notification } from 'antd';
 import { Dayjs } from 'dayjs';
-import { MouseEvent, useCallback, useMemo, useState } from 'react';
+import { MouseEvent, useMemo } from 'react';
 
 interface UpdateEnrollmentKeyModalProps {
   isOpen: boolean;
@@ -39,27 +27,23 @@ export default function UpdateEnrollmentKeyModal({
   onUpdateKey,
   onCancel,
 }: UpdateEnrollmentKeyModalProps) {
-  console.log('enrollmentKey', enrollmentKey);
   const [form] = Form.useForm<UpdateEnrollmentKeyFormData>();
   const store = useStore();
-  const [type, setType] = useState<'unlimited' | 'uses' | 'time'>('unlimited');
-  const isServerEE = store.serverConfig?.IsEE === 'yes';
-
-  const networkOptions = useMemo(() => {
-    return store.networks.map((n) => ({ label: n.netid, value: n.netid }));
-  }, [store.networks]);
+  const { isServerEE } = useServerLicense();
 
   const resetModal = () => {
     form.resetFields();
   };
 
   const relays = useMemo<ExtendedNode[]>(() => {
-    const networkNodes = store.nodes.map((node) => getExtendedNode(node, store.hostsCommonDetails));
+    const relayNodes = store.nodes
+      .filter((node) => isNodeRelay(node) && enrollmentKey.networks.includes(node.network))
+      .map((node) => getExtendedNode(node, store.hostsCommonDetails));
     if (!isServerEE) {
       return [];
     }
-    return networkNodes.filter((node) => isNodeRelay(node));
-  }, [isServerEE, store.hostsCommonDetails, store.nodes]);
+    return relayNodes;
+  }, [isServerEE, store.hostsCommonDetails, store.nodes, enrollmentKey]);
 
   const updateEnrollmentKey = async () => {
     try {
@@ -115,7 +99,7 @@ export default function UpdateEnrollmentKeyModal({
               style={{ width: '100%' }}
               options={[
                 { label: 'Select relay to join with key', value: NULL_NODE_ID, disabled: true },
-                ...relays.map((node) => ({ label: node.name, value: node.id })),
+                ...relays.map((node) => ({ label: `${node.name} (${node.network})`, value: node.id })),
               ]}
             />
           </Form.Item>

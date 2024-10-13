@@ -1,31 +1,41 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AppstoreOutlined,
+  CloudSyncOutlined,
   DatabaseOutlined,
   GlobalOutlined,
   KeyOutlined,
   LaptopOutlined,
   LoadingOutlined,
   LogoutOutlined,
-  RightOutlined,
-  // MobileOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { Alert, Col, MenuProps, Row, Select, Switch, Typography } from 'antd';
 import { Layout, Menu, theme } from 'antd';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { getAmuiTenantsUrl, getAmuiUrl, getHostRoute, getNetworkRoute, resolveAppRoute } from '../utils/RouteUtils';
+import {
+  getAmuiProfileUrl,
+  getAmuiTenantsUrl,
+  getAmuiUrl,
+  getHostRoute,
+  getNetworkRoute,
+  resolveAppRoute,
+} from '../utils/RouteUtils';
 import { BrowserStore, useStore } from '../store/store';
 import { AppRoutes } from '@/routes';
 import { useTranslation } from 'react-i18next';
 import { isSaasBuild } from '@/services/BaseService';
-import { ServerConfigService } from '@/services/ServerConfigService';
+import { ServerConfigService, getUiVersion } from '@/services/ServerConfigService';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
-import { useBranding } from '@/utils/Utils';
+import { isManagedHost, useBranding, useServerLicense } from '@/utils/Utils';
+import VersionUpgradeModal from '@/components/modals/version-upgrade-modal/VersionUpgradeModal';
+import { lt } from 'semver';
+import { isAdminUserOrRole } from '@/utils/UserMgmtUtils';
 
 const { Content, Sider } = Layout;
 
-const SIDE_NAV_EXPANDED_WIDTH = '200px';
-const SIDE_NAV_COLLAPSED_WIDTH = '80px';
+export const SIDE_NAV_EXPANDED_WIDTH = '200px';
+export const SIDE_NAV_COLLAPSED_WIDTH = '80px';
 
 // const SELECTED_COLOR = '#1668dc';
 
@@ -40,18 +50,26 @@ export default function MainLayout() {
   const storeLogout = useStore((state) => state.logout);
   const location = useLocation();
   const branding = useBranding();
+  const { isServerEE } = useServerLicense();
 
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [openSidebarMenus, setOpenSidebarMenus] = useState(['networks']);
+  const [trialEndDate, setTrialEndDate] = useState<Date | null>(null);
+  const [isVersionUpgradeModalOpen, setIsVersionUpgradeModalOpen] = useState(false);
+  const [latestNetmakerVersion, setLatestNetmakerVersion] = useState('');
+  const [canUpgrade, setCanUpgrade] = useState(false);
 
   const recentNetworks = useMemo(
     // TODO: implement most recent ranking
     () =>
       structuredClone(store.networks)
         .sort((a, b) => a.netid.localeCompare(b.netid))
-        .slice(0, 5),
+        .slice(0, 10),
     [store.networks],
   );
+
+  const userHasFullAccess = useMemo(() => isAdminUserOrRole(store.user!), [store.user]);
 
   const sidebarLogo = useMemo(() => {
     const { logoDarkUrl, logoLightUrl, logoDarkSmallUrl, logoLightSmallUrl } = branding;
@@ -99,74 +117,63 @@ export default function MainLayout() {
             },
           ],
         },
-        {
-          key: 'hosts',
-          icon: LaptopOutlined,
-          label: 'Hosts',
-        },
-        // {
-        //   key: 'clients',
-        //   icon: MobileOutlined,
-        //   label: 'Clients',
-        // },
-        {
-          key: 'enrollment-keys',
-          icon: KeyOutlined,
-          label: 'Enrollment Keys',
-        },
+        userHasFullAccess
+          ? {
+              key: 'hosts',
+              icon: LaptopOutlined,
+              label: 'Hosts',
+            }
+          : undefined!,
+        userHasFullAccess
+          ? {
+              key: 'enrollment-keys',
+              icon: KeyOutlined,
+              label: 'Enrollment Keys',
+            }
+          : undefined!,
         {
           type: 'divider',
         },
       ]
         .concat(
+          userHasFullAccess
+            ? {
+                key: 'users',
+                icon: UserOutlined,
+                label: 'User Management',
+              }
+            : [],
+        )
+        .concat(
           isSaasBuild
             ? [
                 {
-                  key: 'amui',
-                  icon: UserOutlined,
-                  label: 'Manage Account',
-                },
-                {
                   key: 'amuitenants',
-                  icon: RightOutlined,
-                  label: 'Switch Tenant',
-                },
-              ]
-            : [
-                // {
-                //   key: 'users',
-                //   icon: UserOutlined,
-                //   label: 'Users',
-                // },
-              ],
-        )
-        .concat(
-          !isSaasBuild
-            ? [
-                {
-                  key: 'users',
-                  icon: UserOutlined,
-                  label: 'Users',
+                  icon: AppstoreOutlined,
+                  label: 'Tenants',
                 },
               ]
             : [],
         )
-        .map((item) => ({
-          key: item.key,
-          type: item.type as any,
-          style: {
-            marginTop: item.type === 'divider' ? '1rem' : '',
-            marginBottom: item.type === 'divider' ? '1rem' : '',
-          },
-          icon: item.icon && React.createElement(item.icon),
-          label: item.label,
-          children: item.children?.map((child) => ({
-            key: (child as any)?.key,
-            label: (child as any)?.label,
-            type: (child as any)?.type,
-          })),
-        })),
-    [recentNetworks, store.user?.isadmin, store.user?.issuperadmin],
+        .map(
+          (item) =>
+            item && {
+              key: item.key,
+              type: item.type as any,
+              style: {
+                marginTop: item.type === 'divider' ? '1rem' : '',
+                marginBottom: item.type === 'divider' ? '1rem' : '',
+              },
+              icon: item.icon && React.createElement(item.icon),
+              label: item.label,
+              children: item.children?.map((child) => ({
+                key: (child as any)?.key,
+                label: (child as any)?.label,
+                type: (child as any)?.type,
+              })),
+            },
+        ),
+    [recentNetworks, userHasFullAccess],
   );
 
   const sideNavBottomItems: MenuProps['items'] = useMemo(
@@ -271,6 +278,33 @@ export default function MainLayout() {
                   alignItems: 'center',
                 }}
                 onClick={() => {
+                  if (isSaasBuild) {
+                    window.location = getAmuiProfileUrl() as any;
+                    return;
+                  }
+                  navigate(resolveAppRoute(AppRoutes.PROFILE_ROUTE));
+                }}
+              >
+                <UserOutlined /> {isSaasBuild ? 'Manage Account' : 'Profile'}
+              </div>
+            ),
+          },
+          {
+            style: {
+              paddingLeft: isSidebarCollapsed ? '.2rem' : '1rem',
+              paddingRight: isSidebarCollapsed ? '.2rem' : '1rem',
+              paddingTop: isSidebarCollapsed ? '.2rem' : '1rem',
+              paddingBottom: isSidebarCollapsed ? '.2rem' : '1rem',
+            },
+            label: (
+              <div
+                style={{
+                  display: 'flex',
+                  flexFlow: 'row nowrap',
+                  gap: '1rem',
+                  alignItems: 'center',
+                }}
+                onClick={() => {
                   storeLogout();
                   navigate(resolveAppRoute(AppRoutes.LOGIN_ROUTE));
                 }}
@@ -301,8 +335,97 @@ export default function MainLayout() {
     }
   }, [location.pathname]);
 
+  const checkLatestVersion = () => {
+    if (isSaasBuild) return;
+    try {
+      const corsProxyUrl = 'https://cors-proxy.netmaker.io';
+      const resourceUrl = 'https://github.com/gravitl/netmaker/releases';
+
+      fetch(`${corsProxyUrl}/${resourceUrl}`)
+        .then((res) => res.text())
+        .then((data) => {
+          const githubReleasesPage = new DOMParser().parseFromString(data, 'text/html');
+          const latestVersion = githubReleasesPage.querySelectorAll('h2.sr-only')?.[1].textContent ?? '0.5';
+          const uiVersion = getUiVersion();
+          if (latestVersion && lt(uiVersion, latestVersion)) {
+            if (isServerEE) setLatestNetmakerVersion(`${latestVersion}-ee`);
+            else setLatestNetmakerVersion(latestVersion);
+            setCanUpgrade(true);
+
+            // animate version info to draw user attention
+            const updateBtn = window.document.querySelector('.version-box .update-btn');
+            updateBtn?.classList.add('animate__animated', 'animate__flash', 'animate__infinite');
+            if (updateBtn) (updateBtn as HTMLElement).style.transform = 'scale(1.4)';
+          }
+        });
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  const openVersionUpgradeModal = () => {
+    if (isSaasBuild) return;
+    if (!canUpgrade) return;
+    setIsVersionUpgradeModalOpen(true);
+
+    // remove animations once user has go the update message
+    const updateBtn = window.document.querySelector('.version-box .update-btn');
+    updateBtn?.classList.remove('animate__animated', 'animate__flash', 'animate__infinite');
+  };
+
+  const contentMarginLeft = useMemo(() => {
+    if (isSidebarCollapsed) {
+      if (isSmallScreen) {
+        return '0px';
+      }
+      return SIDE_NAV_COLLAPSED_WIDTH;
+    }
+    return SIDE_NAV_EXPANDED_WIDTH;
+  }, [isSidebarCollapsed, isSmallScreen]);
+
+  const hideContent = useMemo(() => {
+    // get the current page size using window.innerWidth
+    const width = window.innerWidth;
+    return width < 576 && !isSidebarCollapsed;
+  }, [isSidebarCollapsed, window.innerWidth]);
+
+  const checkIfManagedHostIsLoading = useMemo(() => {
+    // check if managed host is loading
+    const isNewTenant = store.isNewTenant;
+    const isManagedHostLoaded = store.hosts.some((host) => isManagedHost(host.name));
+    return isSaasBuild && isNewTenant && !isManagedHostLoaded;
+  }, [store.isNewTenant, store.hosts]);
+
+  useEffect(() => {
+    store.setSidebarWidth(contentMarginLeft);
+  }, [contentMarginLeft]);
+
+  useEffect(() => {
+    if (store.serverStatus?.status?.trial_end_date) {
+      const endDate = new Date(store.serverStatus.status.trial_end_date);
+      setTrialEndDate(endDate);
+    }
+  }, [store.serverStatus]);
+
+  const getTrialDaysRemainingText = useMemo(() => {
+    let getTrialDaysRemaining = 0;
+    if (trialEndDate) {
+      const currentDate = new Date();
+      const timeDifference = trialEndDate.getTime() - currentDate.getTime();
+      getTrialDaysRemaining = Math.ceil(timeDifference / (1000 * 3600 * 24));
+    }
+    if (getTrialDaysRemaining === 1) {
+      return `Your Pro trial ends on ${trialEndDate?.toDateString()} at ${trialEndDate?.toLocaleTimeString()}, you have less than a day left on your trial.`;
+    } else if (getTrialDaysRemaining > 1) {
+      return `Your Pro trial ends on ${trialEndDate?.toDateString()}, you have ${getTrialDaysRemaining} days left on your trial.`;
+    } else {
+      return `Your Pro trial ended on ${trialEndDate?.toDateString()} at ${trialEndDate?.toLocaleTimeString()}, please contact your administrator to renew your license.`;
+    }
+  }, [trialEndDate]);
+
   useEffect(() => {
     storeFetchNetworks();
+    checkLatestVersion();
   }, [storeFetchNetworks]);
 
   return (
@@ -311,17 +434,32 @@ export default function MainLayout() {
         <Sider
           collapsible
           collapsed={isSidebarCollapsed}
-          onCollapse={(value) => setIsSidebarCollapsed(value)}
+          onCollapse={(isCollapsed) => {
+            setIsSidebarCollapsed(isCollapsed);
+            store.setIsSidebarCollapsed(isCollapsed);
+          }}
+          collapsedWidth={isSmallScreen ? 0 : SIDE_NAV_COLLAPSED_WIDTH}
           width={SIDE_NAV_EXPANDED_WIDTH}
           theme="light"
           style={{
-            overflow: 'auto',
             height: '100vh',
             position: 'fixed',
             left: 0,
             top: 0,
             bottom: 0,
             borderRight: `1px solid ${themeToken.colorBorder}`,
+            zIndex: 1000,
+          }}
+          zeroWidthTriggerStyle={{
+            border: `2px solid ${branding.primaryColor}`,
+            background: 'transparent',
+            borderLeft: 'none',
+            color: branding.primaryColor,
+            top: 0,
+          }}
+          breakpoint="lg"
+          onBreakpoint={(broken: boolean) => {
+            setIsSmallScreen(broken);
           }}
         >
           {/* logo */}
@@ -342,6 +480,7 @@ export default function MainLayout() {
             items={sideNavItems}
             openKeys={openSidebarMenus}
             style={{ borderRight: 'none' }}
+            id="side-nav"
             onOpenChange={(keys: string[]) => {
               setOpenSidebarMenus(keys);
             }}
@@ -384,15 +523,25 @@ export default function MainLayout() {
 
           {/* server version */}
           {!isSidebarCollapsed && (
-            <div style={{ marginTop: '1rem', padding: '0rem 1.5rem', fontSize: '.8rem' }}>
-              <Typography.Text style={{ fontSize: 'inherit' }}>
-                UI: {ServerConfigService.getUiVersion()}{' '}
-                {isSaasBuild && !BrowserStore.hasNmuiVersionSynced() && <LoadingOutlined />}
-              </Typography.Text>
-              <br />
-              <Typography.Text style={{ fontSize: 'inherit' }} type="secondary">
-                Server: {store.serverConfig?.Version ?? 'n/a'}
-              </Typography.Text>
+            <div className="version-box" style={{ marginTop: '1rem', padding: '0rem 1.5rem', fontSize: '.8rem' }}>
+              <div
+                style={{
+                  fontSize: '.8rem',
+                  cursor: canUpgrade ? 'pointer' : '',
+                }}
+                title={canUpgrade ? 'A new version is available. Click to show version upgrade steps' : ''}
+                onClick={() => openVersionUpgradeModal()}
+              >
+                <Typography.Text style={{ fontSize: 'inherit' }}>
+                  UI: {ServerConfigService.getUiVersion()}{' '}
+                  {isSaasBuild && !BrowserStore.hasNmuiVersionSynced() && <LoadingOutlined />}
+                  {canUpgrade && <CloudSyncOutlined style={{ marginLeft: '.5rem' }} className="update-btn" />}
+                </Typography.Text>
+                <br />
+                <Typography.Text style={{ fontSize: 'inherit' }} type="secondary">
+                  Server: {store.serverConfig?.Version ?? 'n/a'}
+                </Typography.Text>
+              </div>
             </div>
           )}
 
@@ -402,18 +551,60 @@ export default function MainLayout() {
             mode="inline"
             selectable={false}
             items={sideNavBottomItems}
-            style={{ borderRight: 'none', position: 'absolute', bottom: '0' }}
+            className={isSidebarCollapsed ? 'bottom-sidebar-menu-close' : 'bottom-sidebar-menu-open'}
           />
         </Sider>
 
         {/* main content */}
         <Layout
+          className="site-layout"
           style={{
             transition: 'all 200ms',
-            marginLeft: isSidebarCollapsed ? SIDE_NAV_COLLAPSED_WIDTH : SIDE_NAV_EXPANDED_WIDTH,
+            marginLeft: contentMarginLeft,
+            display: hideContent ? 'none' : 'block',
+            position: 'relative',
           }}
         >
           <Content style={{ background: themeToken.colorBgContainer, overflow: 'initial', minHeight: '100vh' }}>
+            {/* managed host is loading */}
+            {checkIfManagedHostIsLoading && (
+              <Alert
+                message="Managed host creation in progress (estimated completion time: 5 - 10 minutes)."
+                type="info"
+                showIcon
+                icon={<LoadingOutlined />}
+                style={{ marginBottom: '1rem' }}
+              />
+            )}
+
+            {/* license status indicator */}
+            {store.serverStatus?.status?.is_on_trial_license && (
+              <Row>
+                <Col xs={24}>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ border: 'none', height: '3rem', fontSize: '1rem', color: '#D4B106' }}
+                    message={getTrialDaysRemainingText}
+                  />
+                </Col>
+              </Row>
+            )}
+
+            {/* broker issues indicator */}
+            {!store.serverStatus.status?.broker_connected && (
+              <Row>
+                <Col xs={24}>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ border: 'none', height: '4rem', fontSize: '1rem', color: '#D4B106' }}
+                    message="Your server is not connected to the broker, and the fallback mechanism will kick in. This may impact network performance. Contact your administrator."
+                  />
+                </Col>
+              </Row>
+            )}
+
             {/* server status indicator */}
             {!store.serverStatus.isHealthy && (
               <Row>
@@ -435,6 +626,15 @@ export default function MainLayout() {
           </Content>
         </Layout>
       </Layout>
+
+      {/* misc */}
+      {canUpgrade && (
+        <VersionUpgradeModal
+          isOpen={isVersionUpgradeModalOpen}
+          latestNetmakerVersion={latestNetmakerVersion}
+          onCancel={() => setIsVersionUpgradeModalOpen(false)}
+        />
+      )}
     </AppErrorBoundary>
   );
 }

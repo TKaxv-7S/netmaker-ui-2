@@ -5,6 +5,7 @@ import '../CustomModal.scss';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { Host } from '@/models/Host';
 import { HostsService } from '@/services/HostsService';
+import { isManagedHost } from '@/utils/Utils';
 
 interface UpdateHostModalProps {
   isOpen: boolean;
@@ -19,7 +20,8 @@ export default function UpdateHostModal({ isOpen, host, onUpdateHost, onCancel }
   const store = useStore();
 
   const storeUpdateHost = store.updateHost;
-  const isStaticVal: Host['isstatic'] = Form.useWatch('isstatic', form);
+  const isStaticEndpointVal: Host['isstatic'] = Form.useWatch('isstatic', form);
+  const isStaticPortVal: Host['isstaticport'] = Form.useWatch('isstaticport', form);
 
   const resetModal = () => {
     form.resetFields();
@@ -66,7 +68,7 @@ export default function UpdateHostModal({ isOpen, host, onUpdateHost, onCancel }
               rules={[{ required: true }]}
               data-nmui-intercom="update-host-form_name"
             >
-              <Input placeholder="Host name" />
+              <Input placeholder="Host name" disabled={isManagedHost(host.name)} />
             </Form.Item>
 
             <Form.Item
@@ -87,12 +89,22 @@ export default function UpdateHostModal({ isOpen, host, onUpdateHost, onCancel }
             </Form.Item>
 
             <Form.Item
+              label="Static Port"
+              name="isstaticport"
+              valuePropName="checked"
+              rules={[{ required: true }]}
+              data-nmui-intercom="update-host-form_isstaticport"
+            >
+              <Switch />
+            </Form.Item>
+
+            <Form.Item
               label="Listen Port"
               name="listenport"
-              rules={[{ required: true }]}
+              rules={[{ required: isStaticPortVal }]}
               data-nmui-intercom="update-host-form_listenport"
             >
-              <InputNumber placeholder="Listen Port" min={0} style={{ width: '100%' }} />
+              <InputNumber placeholder="Listen Port" min={0} style={{ width: '100%' }} disabled={!isStaticPortVal} />
             </Form.Item>
 
             <Form.Item
@@ -109,18 +121,27 @@ export default function UpdateHostModal({ isOpen, host, onUpdateHost, onCancel }
               name="isstatic"
               valuePropName="checked"
               rules={[{ required: true }]}
-              data-nmui-intercom="update-host-form_isstatic"
+              data-nmui-intercom="update-host-form_isstaticendpoint"
             >
               <Switch />
             </Form.Item>
 
             <Form.Item
-              label="Endpoint IP"
+              label="Endpoint IP (IPv4)"
               name="endpointip"
-              rules={[{ required: isStaticVal }]}
+              // rules={[{ required: isStaticEndpointVal }]}
               data-nmui-intercom="update-host-form_endpointip"
             >
-              <Input placeholder="Endpoint IP" disabled={!isStaticVal} />
+              <Input placeholder="Endpoint IP" disabled={!isStaticEndpointVal} />
+            </Form.Item>
+
+            <Form.Item
+              label="Endpoint IP (IPv6)"
+              name="endpointipv6"
+              // rules={[{ required: isStaticEndpointVal }]}
+              data-nmui-intercom="update-host-form_endpointipv6"
+            >
+              <Input placeholder="Endpoint IP" disabled={!isStaticEndpointVal} />
             </Form.Item>
 
             <Form.Item
@@ -132,6 +153,7 @@ export default function UpdateHostModal({ isOpen, host, onUpdateHost, onCancel }
             >
               <Switch />
             </Form.Item>
+
             <Form.Item
               label="Auto Update"
               name="autoupdate"

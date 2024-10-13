@@ -5,7 +5,7 @@ import { Col, FormInstance, Progress, Row, Space, Tag, Tooltip, Typography } fro
 import { getNodeConnectivityStatus } from './NodeUtils';
 import { ExtClientAcls, ExternalClient } from '@/models/ExternalClient';
 import { ACL_ALLOWED, ACL_DENIED, AclStatus, ACL_UNDEFINED } from '@/models/Acl';
-import { CloseOutlined } from '@ant-design/icons';
+import { CloseOutlined, FieldTimeOutlined } from '@ant-design/icons';
 import { MetricCategories, UptimeNodeMetrics } from '@/models/Metrics';
 import { ReactNode, useEffect, useState } from 'react';
 import {
@@ -17,6 +17,11 @@ import { Rule } from 'antd/es/form';
 import { useStore } from '@/store/store';
 import { BrandingConfig } from '@/models/BrandingConfig';
 import { isSaasBuild } from '@/services/BaseService';
+import { NetworkUsecaseString } from '@/store/networkusecase';
+
+export type NetworkUsecaseMap = {
+  [key in NetworkUsecaseString]: string;
+};
 
 export function renderNodeHealth(health: NodeConnectivityStatus) {
   switch (health) {
@@ -252,11 +257,18 @@ export function renderMetricValue(metricType: MetricCategories, value: unknown):
               (value as number) > METRIC_LATENCY_DANGER_THRESHOLD
                 ? '#D32029'
                 : (value as number) > METRIC_LATENCY_WARNING_THRESHOLD
-                ? '#D8BD14'
-                : undefined,
+                  ? '#D8BD14'
+                  : undefined,
           }}
         >
-          {value as number} ms
+          {(value as number) === 999 ? (
+            <Tooltip title="Latency is 999ms">
+              {' '}
+              <FieldTimeOutlined />{' '}
+            </Tooltip>
+          ) : (
+            `${value as number}ms`
+          )}
         </Typography.Text>
       );
       break;
@@ -341,6 +353,29 @@ const validateName = (fieldName: string): Rule[] => [
   },
 ];
 
+const validateExtClientName = (fieldName: string): Rule[] => [
+  {
+    required: false,
+    message: `Please enter a ${fieldName}, with a minimum of 5 characters and a maximum of 32 characters.`,
+    min: 5,
+    max: 32,
+  },
+  {
+    validator: (_: any, value: string) => {
+      if (value === '') {
+        return Promise.resolve();
+      }
+
+      const regex = /^[^\s]+$/;
+      if (regex.test(value)) {
+        return Promise.resolve();
+      } else {
+        return Promise.reject(`The ${fieldName} should not have spaces`);
+      }
+    },
+  },
+];
+
 const validateSpecialCharactersWithNumbers = (_: any, value: string) => {
   const regex = /^[a-zA-Z0-9\s]+$/; // Regular expression to allow only alphabetic characters, numbers and spaces
 
@@ -363,6 +398,35 @@ export const validateEmailField: Rule[] = [
 
 export const validateLastNameField = validateName('last name');
 export const validateFirstNameField = validateName('first name');
+export const validateExtClientNameField = validateExtClientName('client id');
+
+// check host is a mananged host
+export const isManagedHost = (name: string): boolean => {
+  // check if host name matches the pattern: tenant-<TENANT_ID>-mgm-endpoint-<SOME_UUID>
+  // check if host name starts with tenant-
+  // check if host name has -mgm-endpoint-
+  // check if host name matches the pattern: managed-endpoint-<REGION>-<NUMBER>
+  // check if host name starts with managed-endpoint-
+  // check if host name has a number at the end
+  const regex1 = /^tenant-/;
+  const regex2 = /-mgm-endpoint-/;
+  const regex3 = /^managed-endpoint-/;
+  const regex4 = /\d+$/;
+  return (regex1.test(name) && regex2.test(name)) || (regex3.test(name) && regex4.test(name));
+};
+
+const validateIfHostNameIsNotManagedHost = (_: any, value: string) => {
+  if (isManagedHost(value)) {
+    return Promise.reject('Host name cannot follow the pattern: tenant-<TENANT_ID>-mgm-endpoint-<SOME_UUID>');
+  } else {
+    return Promise.resolve();
+  }
+};
+
+export const validateHostNameField: Rule[] = [
+  { required: true, message: 'Please enter a value.' },
+  { validator: validateIfHostNameIsNotManagedHost },
+];
 
 /**
  * Hook to get app branding configuration.
@@ -405,4 +469,77 @@ export function useBranding(): BrandingConfig {
   }, [serverStatus?.status?.is_pro]);
 
   return branding;
+}
+
+export const networkUsecaseMapText: NetworkUsecaseMap = {
+  remote_access_multiple_users: 'Remote Access Multiple Users',
+  egress_to_cloud_vpc: 'Egress to Cloud VPC',
+  // egress_to_office_lan_ips: 'Egress to Office LAN IPs',
+};
+
+/**
+ * Util funtion that copies text to clipboard
+ *
+ * @param text string to write to system clipboard
+ */
+export async function copyTextToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    console.error('Failed to copy to clipboard', err);
+    throw new Error('Failed to copy to clipboard');
+  }
+}
+
+/**
+ * Converts a snake case string to title case.
+ *
+ * @param snakeCaseString the snake case string to convert
+ * @returns the title case string
+ */
+export function snakeCaseToTitleCase(snakeCaseString: string): string {
+  const words = snakeCaseString.split('_');
+  const titleCaseWords = words.map((word) => {
+    const capitalizedWord = word.charAt(0).toUpperCase() + word.slice(1);
+    return capitalizedWord;
+  });
+  const titleCaseString = titleCaseWords.join(' ');
+  return titleCaseString;
+}
+
+/**
+ * Converts a kebab case string to title case.
+ *
+ * @param kebabCaseString the snake case string to convert
+ * @returns the title case string
+ */
+export function kebabCaseToTitleCase(kebabCaseString: string): string {
+  const words = kebabCaseString.split('-');
+  const titleCaseWords = words.map((word) => {
+    const capitalizedWord = word.charAt(0).toUpperCase() + word.slice(1);
+    return capitalizedWord;
+  });
+  const titleCaseString = titleCaseWords.join(' ');
+  return titleCaseString;
+}
+
+/**
+ * Utility hook to determine if the server is on a paid license or not.
+ *
+ * @returns whether the server on a paid license or not
+ */
+export function useServerLicense(): { isServerEE: boolean } {
+  const serverStatus = useStore((s) => s.serverStatus);
+
+  const [serverLicense, setServerLicense] = useState<'pro' | 'ce'>('ce');
+
+  useEffect(() => {
+    if (serverStatus?.status?.is_pro === true) {
+      setServerLicense('pro');
+    } else {
+      setServerLicense('ce');
+    }
+  }, [serverStatus?.status?.is_pro]);
+
+  return { isServerEE: serverLicense === 'pro' };
 }

@@ -13,6 +13,10 @@ export const de: LanguageResource = {
     login: 'Einloggen',
     signup: 'Registrieren',
     terms5: 'Mit der Registrierung erklären Sie sich einverstanden mit unseren',
+    'signup-via-invite': 'Registrieren über Einladung',
+    'invalid-invite': 'Ungültiger Einladungscode',
+    'signup-with-sso': 'Registrieren mit SSO',
+    'signup-with-password': 'Registrieren mit Passwort',
   },
   signin: {
     signin: 'Einloggen',
@@ -32,9 +36,10 @@ export const de: LanguageResource = {
   },
   error: {
     servermalfunction: 'Fehler Serverstörung',
-    contactyourserveradmin: 'Wenden Sie sich an Ihren Server-Administrator oder überprüfen Sie Ihre Netzwerkeinstellungen',
+    contactyourserveradmin:
+      'Wenden Sie sich an Ihren Server-Administrator oder überprüfen Sie Ihre Netzwerkeinstellungen',
     billingerroroccured: 'Fehler bei der Abrechnung/Zahlung aufgetreten',
-    checkbillingsetting: "Überprüfen Sie die Abrechnungseinstellungen Ihres Tenants in der",
+    checkbillingsetting: 'Überprüfen Sie die Abrechnungseinstellungen Ihres Tenants in der',
   },
   info: {
     connectmultiplehosts: 'Mehrere Hosts verbinden',

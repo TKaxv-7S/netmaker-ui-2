@@ -7,6 +7,7 @@ import { useStore } from '@/store/store';
 import { AvailableArchs, AvailableOses } from '@/models/AvailableOses';
 import { BUG_REPORT_URL } from '@/constants/AppConstants';
 import { ServerConfigService } from '@/services/ServerConfigService';
+import { UserGroup, UserRole } from '@/models/User';
 
 type AmuiRouteAction = '' | 'upgrade' | 'invite-user';
 
@@ -26,11 +27,23 @@ export function isCurrentRouteVersioned() {
  * @param route route to resolve
  * @returns the resolved route
  */
-export function resolveAppRoute(route: string) {
+export function resolveAppRoute(route: string, ...queryParams: { [key: string]: string }[]) {
   if (isCurrentRouteVersioned()) {
-    return `/${ServerConfigService.getUiVersion()}${route}`;
+    const ret = `/${ServerConfigService.getUiVersion()}${route}?${queryParams
+      .map((param) => `${Object.keys(param)[0]}=${encodeURIComponent(param[Object.keys(param)[0]])}`)
+      .join('&')}`;
+    if (ret.endsWith('?')) {
+      return ret.slice(0, -1);
+    }
+    return ret;
   }
-  return route;
+  const ret = `${route}?${queryParams
+    .map((param) => `${Object.keys(param)[0]}=${encodeURIComponent(param[Object.keys(param)[0]])}`)
+    .join('&')}`;
+  if (ret.endsWith('?')) {
+    return ret.slice(0, -1);
+  }
+  return ret;
 }
 
 // Get host route from host obj or ID
@@ -66,6 +79,30 @@ export function getNetworkRoute(networkOrId: Network | Network['netid']): string
   return `${resolveAppRoute(AppRoutes.NETWORK_DETAILS_ROUTE).replace(placeholder, networkOrId.netid)}`;
 }
 
+// Get network role details route from role obj or ID
+export function getNetworkRoleRoute(roleOrId: UserRole | UserRole['id']): string {
+  const placeholder = ':roleId';
+  if (typeof roleOrId === 'string')
+    return `${resolveAppRoute(AppRoutes.NETWORK_ROLE_DETAILS_ROUTE).replace(placeholder, roleOrId)}`;
+  return `${resolveAppRoute(AppRoutes.NETWORK_ROLE_DETAILS_ROUTE).replace(placeholder, roleOrId.id)}`;
+}
+
+// Get platform access level details route from role obj or ID
+export function getPlatformRoleRoute(roleOrId: UserRole | UserRole['id']): string {
+  const placeholder = ':roleId';
+  if (typeof roleOrId === 'string')
+    return `${resolveAppRoute(AppRoutes.PLATFORM_ROLE_DETAILS_ROUTE).replace(placeholder, roleOrId)}`;
+  return `${resolveAppRoute(AppRoutes.PLATFORM_ROLE_DETAILS_ROUTE).replace(placeholder, roleOrId.id)}`;
+}
+
+// Get user group details route from role obj or ID
+export function getUserGroupRoute(groupOrId: UserGroup | UserGroup['id']): string {
+  const placeholder = ':groupId';
+  if (typeof groupOrId === 'string')
+    return `${resolveAppRoute(AppRoutes.USER_GROUP_DETAILS_ROUTE).replace(placeholder, groupOrId)}`;
+  return `${resolveAppRoute(AppRoutes.USER_GROUP_DETAILS_ROUTE).replace(placeholder, groupOrId.id)}`;
+}
+
 // Get new host route
 export function getNewHostRoute(redirectTo?: string): string {
   return `${resolveAppRoute(AppRoutes.NEW_HOST_ROUTE)}${
@@ -90,6 +127,11 @@ export function getAmuiTenantsUrl() {
   return `${AMUI_URL}/tenants`;
 }
 
+// Function to get AMUI profile route
+export function getAmuiProfileUrl() {
+  return `${AMUI_URL}/profile`;
+}
+
 // Function to get license dashboard route
 export function getLicenseDashboardUrl() {
   return import.meta.env.VITE_LICENSE_DASHBOARD_URL;
@@ -100,12 +142,23 @@ export function getNetmakerSupportEmail() {
   return import.meta.env.VITE_NETMAKER_SUPPORT_EMAIL;
 }
 
+// Function to get Netmaker trial period docs
+export function getNetmakerTrialPeriodDocs() {
+  return import.meta.env.VITE_NETMAKER_TRIAL_PERIOD_DOCS_URL;
+}
+
+// Function to get PostHog public API key
+export function getPostHogPublicApiKey() {
+  return (window as any).NMUI_PUBLIC_POSTHOG_KEY || import.meta.env.VITE_PUBLIC_POSTHOG_KEY;
+}
+
+// Function to get PostHog host
+export function getPostHogHost() {
+  return (window as any).NMUI_PUBLIC_POSTHOG_HOST || import.meta.env.VITE_PUBLIC_POSTHOG_HOST;
+}
+
 // Function to get netclient download link and filename based on OS, arch and type
-export function getNetclientDownloadLink(
-  os: AvailableOses,
-  arch: AvailableArchs,
-  appType: 'gui' | 'cli' = 'gui'
-): [string, string] {
+export function getNetclientDownloadLink(os: AvailableOses, arch: AvailableArchs): [string, string] {
   const fileNamePlaceholder = ':fileName';
   const verisonPlaceholder = ':version';
   const netclientBinTemplate: string | undefined = import.meta.env.VITE_NETCLIENT_BIN_URL_TEMPLATE;
@@ -121,15 +174,43 @@ export function getNetclientDownloadLink(
 
   if (!serverVersion) return ['about:blank', ''];
 
-  if (appType === 'gui') {
-    effectiveFileName += '-gui';
-  }
   effectiveFileName += `-${platform}-${arch}`;
 
-  if (platform === 'windows') effectiveFileName = 'netclient_x86.msi';
+  if (platform === 'windows') effectiveFileName = 'netclientbundle.exe';
   else if (platform === 'darwin') {
     if (arch === 'amd64') effectiveFileName = 'Netclient-Intel.pkg';
     else if (arch === 'arm64') effectiveFileName = 'Netclient-M1.pkg';
+  }
+
+  return [
+    netclientBinTemplate.replace(verisonPlaceholder, serverVersion).replace(fileNamePlaceholder, effectiveFileName),
+    effectiveFileName,
+  ];
+}
+
+// Function to get rac download link and filename based on OS, arch and type
+export function getRACDownloadLink(os: AvailableOses, arch: AvailableArchs): [string, string] {
+  const fileNamePlaceholder = ':fileName';
+  const verisonPlaceholder = ':version';
+  const netclientBinTemplate: string | undefined = import.meta.env.VITE_NETCLIENT_BIN_URL_TEMPLATE;
+
+  if (!netclientBinTemplate) {
+    console.error('NETCLIENT TEMPLATE is not defined. Contact your server admin');
+    return ['about:blank', ''];
+  }
+
+  const platform = os === 'macos' ? 'darwin' : os;
+  const serverVersion = useStore.getState().serverConfig?.Version ?? '';
+  let effectiveFileName = 'remote-client';
+
+  if (!serverVersion) return ['about:blank', ''];
+
+  effectiveFileName += `-${platform}-${arch}`;
+
+  if (platform === 'windows') effectiveFileName = 'remoteclientbundle.exe';
+  else if (platform === 'darwin') {
+    if (arch === 'amd64') effectiveFileName = 'remote-access-client-Intel.pkg';
+    else if (arch === 'arm64') effectiveFileName = 'remote-access-client-M1.pkg';
   }
 
   return [
@@ -161,7 +242,7 @@ export function openInNewTab(url: string) {
 // Function to file a bug report for the UI
 export function fileBugReport(body: string) {
   openInNewTab(
-    BUG_REPORT_URL.replace(':body', `Describe what happened...%0A%0A Error log: %0A\`${encodeURIComponent(body)}\``)
+    BUG_REPORT_URL.replace(':body', `Describe what happened...%0A%0A Error log: %0A\`${encodeURIComponent(body)}\``),
   );
 }
 
@@ -173,4 +254,13 @@ export function fileBugReport(body: string) {
 export function reloadNmuiWithVersion(uiVersion = '') {
   const newUrl = `${window.location.origin}/${uiVersion ? `${uiVersion}/` : ''}`;
   window.location.href = newUrl;
+}
+
+/**
+ * Get the frontend URL NMUI runs on
+ *
+ * @returns the frontend URL NMUI runs on
+ */
+export function getNetmakerUiHost() {
+  return window?.location?.host || '';
 }

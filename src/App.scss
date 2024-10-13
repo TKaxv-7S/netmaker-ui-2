@@ -16,6 +16,14 @@
 .page-padding {
   @extend .page-padding-y;
   @extend .page-padding-x;
+
+  @media screen and (max-width: 1050px) { 
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) { // 768px is a common breakpoint for tablets and below
+    padding: 24px 15px 16px 15px;
+  }
 }
 
 .page-row-padding-x {
@@ -40,6 +48,14 @@
   @extend .page-row-padding-x;
   @extend .page-row-padding-y;
   @extend .page-row-padding-b;
+
+  @media screen and (max-width: 1362px) { 
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) { // 768px is a common breakpoint for tablets and below
+    padding: 24px 10px 16px 10px;
+  }
 }
 
 .tabbed-page-row-padding-x {
@@ -54,4 +70,133 @@
 .tabbed-page-row-padding {
   @extend .tabbed-page-row-padding-x;
   @extend .tabbed-page-row-padding-y;
+}
+
+#side-nav > li:nth-child(2) {
+  max-height: 450px;
+  overflow-y: auto;
+
+  /* For Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #888 #fff; /* Scroll thumb color, Track color */
+
+  /* For Webkit browsers like Chrome and Safari */
+  &::-webkit-scrollbar {
+    width: 5px; /* Adjust width for vertical scrollbar */
+    border-radius: 2.5px; /* Half of the scrollbar width */
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #888; /* Color of the scroll thumb */
+    border-radius: 2.5px; /* Half of the scrollbar width */
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Color of the scroll thumb on hover */
+  }
+}
+
+.auth-page-container {
+  margin-top: 15vh;
+  position: relative;
+  height: fit-content;
+  width: 40%;
+
+  @media (max-width: 768px) { // 768px is a common breakpoint for tablets and below
+    width: 70%;
+    // margin-top: 5vh;
+  }
+
+  @media screen and (max-width: 480px) { 
+    width: 90%;
+  }
+
+  @media screen and (max-width: 375px) { 
+    width: 100%;
+  }
+}
+
+.dashboard-page-row {
+  @media screen and (max-width: 425px) { 
+    margin-top: 10px;
+  }
+}
+
+.dashboard-page-row-2 {
+  @media screen and (max-width: 425px) { 
+    margin-top: 90px;
+  }
+}
+
+.dashboard-page-row-space {
+  @media screen and (max-width: 425px) { 
+    row-gap: 0px;
+  }
+}
+
+.card-con {
+  margin-top: 8rem; 
+  margin-bottom: 4rem; 
+  padding: 0px 5.125rem;
+
+  @media screen and (max-width: 1200px) { 
+    margin-top: 15rem;
+    padding: 0px 5.125rem;
+  }
+
+  @media screen and (max-width: 768px) { 
+    margin-top: 18rem;
+    padding: 0px 1.125rem;
+  }
+}
+
+.guided-tour-text {
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.upgrade-modal {
+  background-repeat: no-repeat !important;
+  @media screen and (max-width: 768px) { 
+    height: 500px !important;
+    background-color: no;
+  }
+}
+.tutorial-banner-link {
+  color: white;
+  font-weight: 600;
+}
+
+.tutorial-banner-link:hover {
+  text-decoration: underline;
+  color: white;
+}
+
+.table-wrapper {
+  overflow: auto;
+  width: 100%;
+}
+
+.highlighted-row {
+  $bg-color: rgba(128, 107, 282);
+  $bg-color-alpha: rgba($bg-color, 0.1);
+  background-color: $bg-color-alpha !important;
+
+  td.ant-table-column-sort {
+    background-color: transparent;
+  }
+}
+
+.bottom-sidebar-menu-open {
+  border-right: none;
+  position: absolute;
+  bottom: 0;
+}
+
+.bottom-sidebar-menu-close {
+  border-right: none;
+  position: absolute;
+  bottom: 0;
+  width: 80px !important;
 }

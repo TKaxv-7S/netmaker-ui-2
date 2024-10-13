@@ -277,10 +277,32 @@ export default function HostDetailsPage(props: PageProps) {
             data-nmui-intercom="host-details_endpoint"
           >
             <Col xs={12}>
-              <Typography.Text disabled>Endpoint</Typography.Text>
+              <Typography.Text disabled>Endpoint (IPv4)</Typography.Text>
             </Col>
             <Col xs={12}>
               <Typography.Text>{host.endpointip}</Typography.Text>
+            </Col>
+          </Row>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_endpointv6"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Endpoint (IPv6)</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{host.endpointipv6}</Typography.Text>
+            </Col>
+          </Row>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_isstaticendpoint"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Static Endpoint</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{host.isstatic ? 'Yes' : 'No'}</Typography.Text>
             </Col>
           </Row>
           <Row
@@ -292,6 +314,17 @@ export default function HostDetailsPage(props: PageProps) {
             </Col>
             <Col xs={12}>
               <Typography.Text>{host.listenport}</Typography.Text>
+            </Col>
+          </Row>
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="host-details_isstaticport"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Static Port</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{host.isstaticport ? 'Yes' : 'No'}</Typography.Text>
             </Col>
           </Row>
           <Row
@@ -395,17 +428,6 @@ export default function HostDetailsPage(props: PageProps) {
           </Row>
           <Row
             style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
-            data-nmui-intercom="host-details_isstatic"
-          >
-            <Col xs={12}>
-              <Typography.Text disabled>Static Endpoint</Typography.Text>
-            </Col>
-            <Col xs={12}>
-              <Typography.Text>{host.isstatic ? 'Yes' : 'No'}</Typography.Text>
-            </Col>
-          </Row>
-          <Row
-            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
             data-nmui-intercom="host-details_debug"
           >
             <Col xs={12}>
@@ -453,17 +475,19 @@ export default function HostDetailsPage(props: PageProps) {
         </Row>
         <Row style={{ marginTop: '1rem' }}>
           <Col xs={24}>
-            <Table
-              columns={interfacesTableCols}
-              dataSource={
-                host?.interfaces?.filter((iface) =>
-                  `${iface.name}${iface.addressString}`
-                    .toLocaleLowerCase()
-                    .includes(searchText.toLocaleLowerCase().trim()),
-                ) ?? []
-              }
-              rowKey={(iface) => `${iface.name}${iface.addressString}`}
-            />
+            <div className="table-wrapper">
+              <Table
+                columns={interfacesTableCols}
+                dataSource={
+                  host?.interfaces?.filter((iface) =>
+                    `${iface.name}${iface.addressString}`
+                      .toLocaleLowerCase()
+                      .includes(searchText.toLocaleLowerCase().trim()),
+                  ) ?? []
+                }
+                rowKey={(iface) => `${iface.name}${iface.addressString}`}
+              />
+            </div>
           </Col>
         </Row>
       </>

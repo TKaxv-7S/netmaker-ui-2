@@ -249,8 +249,20 @@ export default function NetworkHostDetailsPage(props: PageProps) {
       >
         <Card style={{ width: '50%', marginTop: '2rem' }}>
           <Typography.Title level={5} style={{ marginTop: '0rem' }}>
-            Network settings
+            Host Network settings
           </Typography.Title>
+
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_nodeid"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Host Network ID</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{node?.id ?? ''}</Typography.Text>
+            </Col>
+          </Row>
 
           <Row
             style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
@@ -354,6 +366,18 @@ export default function NetworkHostDetailsPage(props: PageProps) {
 
           <Row
             style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+            data-nmui-intercom="network-host-details_metadata"
+          >
+            <Col xs={12}>
+              <Typography.Text disabled>Metadata</Typography.Text>
+            </Col>
+            <Col xs={12}>
+              <Typography.Text>{node?.metadata}</Typography.Text>
+            </Col>
+          </Row>
+
+          <Row
+            style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
             data-nmui-intercom="network-host-details_lastcheckin"
           >
             <Col xs={12}>
@@ -417,10 +441,32 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                 data-nmui-intercom="network-host-details_hostendpoint"
               >
                 <Col xs={12}>
-                  <Typography.Text disabled>Endpoint</Typography.Text>
+                  <Typography.Text disabled>Endpoint (IPv4)</Typography.Text>
                 </Col>
                 <Col xs={12}>
                   <Typography.Text>{host.endpointip}</Typography.Text>
+                </Col>
+              </Row>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostendpointv6"
+              >
+                <Col xs={12}>
+                  <Typography.Text disabled>Endpoint (IPv6)</Typography.Text>
+                </Col>
+                <Col xs={12}>
+                  <Typography.Text>{host.endpointipv6}</Typography.Text>
+                </Col>
+              </Row>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostisstaticendpoint"
+              >
+                <Col xs={12}>
+                  <Typography.Text disabled>Static Endpoint</Typography.Text>
+                </Col>
+                <Col xs={12}>
+                  <Typography.Text>{host.isstatic ? 'Yes' : 'No'}</Typography.Text>
                 </Col>
               </Row>
               <Row
@@ -432,6 +478,17 @@ export default function NetworkHostDetailsPage(props: PageProps) {
                 </Col>
                 <Col xs={12}>
                   <Typography.Text>{host.listenport}</Typography.Text>
+                </Col>
+              </Row>
+              <Row
+                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
+                data-nmui-intercom="network-host-details_hostisstaticport"
+              >
+                <Col xs={12}>
+                  <Typography.Text disabled>Static Port</Typography.Text>
+                </Col>
+                <Col xs={12}>
+                  <Typography.Text>{host.isstaticport ? 'Yes' : 'No'}</Typography.Text>
                 </Col>
               </Row>
               <Row
@@ -535,17 +592,6 @@ export default function NetworkHostDetailsPage(props: PageProps) {
               </Row>
               <Row
                 style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
-                data-nmui-intercom="network-host-details_hostisstatic"
-              >
-                <Col xs={12}>
-                  <Typography.Text disabled>Static Endpoint</Typography.Text>
-                </Col>
-                <Col xs={12}>
-                  <Typography.Text>{host.isstatic ? 'Yes' : 'No'}</Typography.Text>
-                </Col>
-              </Row>
-              <Row
-                style={{ borderBottom: `1px solid ${themeToken.colorBorder}`, padding: '.5rem 0rem' }}
                 data-nmui-intercom="network-host-details_hostdebug"
               >
                 <Col xs={12}>
@@ -589,17 +635,19 @@ export default function NetworkHostDetailsPage(props: PageProps) {
         </Row>
         <Row style={{ marginTop: '1rem' }}>
           <Col xs={24}>
-            <Table
-              columns={interfacesTableCols}
-              dataSource={
-                host?.interfaces?.filter((iface) =>
-                  `${iface.name}${iface.addressString}`
-                    .toLocaleLowerCase()
-                    .includes(searchText.toLocaleLowerCase().trim()),
-                ) ?? []
-              }
-              rowKey={(iface) => `${iface.name}${iface.addressString}`}
-            />
+            <div className="table-wrapper">
+              <Table
+                columns={interfacesTableCols}
+                dataSource={
+                  host?.interfaces?.filter((iface) =>
+                    `${iface.name}${iface.addressString}`
+                      .toLocaleLowerCase()
+                      .includes(searchText.toLocaleLowerCase().trim()),
+                  ) ?? []
+                }
+                rowKey={(iface) => `${iface.name}${iface.addressString}`}
+              />
+            </div>
           </Col>
         </Row>
       </>
@@ -643,7 +691,7 @@ export default function NetworkHostDetailsPage(props: PageProps) {
         {/* top bar */}
         <Row className="tabbed-page-row-padding">
           <Col xs={24}>
-            <Link to={getNetworkRoute(networkId || '')}>View Network</Link>
+            <Link to={getNetworkRoute(networkId || '')}>Back to Network ({networkId})</Link>
             <Row>
               <Col xs={18}>
                 <Typography.Title level={2} style={{ marginTop: '.5rem', marginBottom: '2rem' }}>

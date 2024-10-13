@@ -3,22 +3,32 @@ import { AuthService } from '@/services/AuthService';
 import { LoginDto } from '@/services/dtos/LoginDto';
 import { useStore } from '@/store/store';
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Col, Divider, Form, Image, Input, Layout, notification, Row, Typography } from 'antd';
+import { Alert, Button, Checkbox, Col, Divider, Form, Image, Input, Layout, notification, Row, Typography } from 'antd';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { AMUI_URL, isSaasBuild } from '../../services/BaseService';
+import {
+  AMUI_URL,
+  NMUI_ACCESS_TOKEN_LOCALSTORAGE_KEY,
+  NMUI_USERNAME_LOCALSTORAGE_KEY,
+  NMUI_USER_LOCALSTORAGE_KEY,
+  NMUI_USER_PLATFORM_ROLE_LOCALSTORAGE_KEY,
+  isSaasBuild,
+} from '../../services/BaseService';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { UsersService } from '@/services/UsersService';
-import { User } from '@/models/User';
+import { User, UserRole } from '@/models/User';
 import { ApiRoutes } from '@/constants/ApiRoutes';
 import { resolveAppRoute, truncateQueryParamsFromCurrentUrl, useQuery } from '@/utils/RouteUtils';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { useBranding } from '@/utils/Utils';
+import UpgradeModal from '@/components/modals/upgrade-modal/UpgradeModal';
 
 interface LoginPageProps {
   isFullScreen?: boolean;
 }
+
+// const USER_ERROR_MESSAGE = 'only admins can access dashboard';
 
 export default function LoginPage(props: LoginPageProps) {
   const [form] = Form.useForm<LoginDto>();
@@ -32,21 +42,32 @@ export default function LoginPage(props: LoginPageProps) {
   const location = useLocation();
   const currentTheme = store.currentTheme;
   const branding = useBranding();
+  const isServerPro = store.serverStatus?.status?.is_pro;
 
   const oauthToken = query.get('login');
   const oauthUser = query.get('user');
   const [shouldRemember, setShouldRemember] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isBasicAuthLoading, setIsBasicAuthLoading] = useState(false);
+  const [isSsoLoading, setIsSsoLoading] = useState(false);
+  const [isUserDeniedFromDashboard, setIsUserDeniedFromDashboard] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
   const getUserAndUpdateInStore = async (username: User['username']) => {
     try {
-      const user = await (await UsersService.getUser(username)).data;
-
-      if (!user?.issuperadmin && !user?.isadmin) {
-        notify.error({ message: 'Failed to login', description: 'User is not an admin' });
+      const user = await (await UsersService.getUser(username)).data.Response;
+      const userPlatformRole: UserRole = user.platform_role;
+      if (userPlatformRole.deny_dashboard_access) {
+        notify.error({
+          message: 'Failed to login',
+          description: 'You do not have permissions to access the dashboard',
+        });
+        setIsUserDeniedFromDashboard(true);
         return;
       }
-      store.setStore({ user });
+
+      store.setStore({ user, userPlatformRole });
+      window?.localStorage?.setItem(NMUI_USER_LOCALSTORAGE_KEY, JSON.stringify(user));
+      window?.localStorage?.setItem(NMUI_USER_PLATFORM_ROLE_LOCALSTORAGE_KEY, JSON.stringify(user.platform_role));
     } catch (err) {
       notify.error({ message: 'Failed to get user details', description: extractErrorMsg(err as any) });
     }
@@ -55,15 +76,19 @@ export default function LoginPage(props: LoginPageProps) {
   const onLogin = async () => {
     try {
       const formData = await form.validateFields();
-      setIsLoading(true);
+      setIsBasicAuthLoading(true);
       const data = await (await AuthService.login(formData)).data;
       store.setStore({ jwt: data.Response.AuthToken, username: data.Response.UserName });
+      window?.localStorage?.setItem(NMUI_ACCESS_TOKEN_LOCALSTORAGE_KEY, data.Response.AuthToken);
+      window?.localStorage?.setItem(NMUI_USERNAME_LOCALSTORAGE_KEY, data.Response.UserName);
       await storeFetchServerConfig();
       await getUserAndUpdateInStore(data.Response.UserName);
     } catch (err) {
-      notify.error({ message: 'Failed to login', description: extractErrorMsg(err as any) });
+      const errorMessage = extractErrorMsg(err as any);
+      notify.error({ message: 'Failed to login', description: errorMessage });
+      // checkLoginErrorMessage(errorMessage);
     } finally {
-      setIsLoading(false);
+      setIsBasicAuthLoading(false);
     }
   };
 
@@ -73,14 +98,18 @@ export default function LoginPage(props: LoginPageProps) {
   }, [navigate]);
 
   const onSSOLogin = useCallback(() => {
-    setIsLoading(true);
+    if (!isServerPro) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    setIsSsoLoading(true);
     if (!store.baseUrl) {
       notify.error({ message: 'Failed to login', description: 'Misconfigured Server URL' });
-      setIsLoading(false);
+      setIsSsoLoading(false);
       return;
     }
     window.location.href = `${store.baseUrl}${ApiRoutes.LOGIN_OAUTH}`;
-  }, [notify, store.baseUrl]);
+  }, [notify, store.baseUrl, isServerPro]);
 
   useEffect(() => {
     checkIfServerHasAdminAndRedirect();
@@ -117,12 +146,9 @@ export default function LoginPage(props: LoginPageProps) {
       <Layout style={{ height: '100%', minHeight: '100vh', justifyContent: 'center', alignItems: 'center' }}>
         <Layout.Content
           style={{
-            marginTop: '15vh',
-            position: 'relative',
-            height: 'fit-content',
-            width: '40%',
             padding: props.isFullScreen ? 0 : 24,
           }}
+          className="auth-page-container"
         >
           <Row>
             <Col xs={24} style={{ textAlign: 'center' }}>
@@ -135,6 +161,21 @@ export default function LoginPage(props: LoginPageProps) {
           </Row>
 
           <Row style={{ marginTop: '4rem' }}>
+            {isUserDeniedFromDashboard && (
+              <Alert
+                description={
+                  <>
+                    User not authorized for dashboard access. Only admins can access the dashboard. Users should use the
+                    remote access client.{' '}
+                    <a href="https://docs.netmaker.io/pro/rac.html" target="_blank" rel="noopener noreferrer">
+                      Click here for more details.
+                    </a>
+                  </>
+                }
+                type="error"
+                showIcon
+              />
+            )}
             <Col xs={24}>
               <Typography.Title level={2}>{t('signin.signin')}</Typography.Title>
             </Col>
@@ -183,7 +224,7 @@ export default function LoginPage(props: LoginPageProps) {
             </Typography.Text>
 
             <Form.Item style={{ marginTop: '1.5rem' }}>
-              <Button type="primary" block onClick={onLogin} loading={isLoading}>
+              <Button type="primary" block onClick={onLogin} loading={isBasicAuthLoading}>
                 {t('signin.signin')}
               </Button>
             </Form.Item>
@@ -191,16 +232,21 @@ export default function LoginPage(props: LoginPageProps) {
               <Typography.Text>{t('signin.or')}</Typography.Text>
             </Divider>
             <Form.Item style={{ marginTop: '1.5rem' }}>
-              <Button type="default" block onClick={onSSOLogin} loading={isLoading}>
+              <Button type="default" block onClick={onSSOLogin} loading={isSsoLoading}>
                 {t('signin.sso')}
               </Button>
             </Form.Item>
           </Form>
         </Layout.Content>
-
-        {/* misc */}
-        {notifyCtx}
       </Layout>
+
+      {/* misc */}
+      {notifyCtx}
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onUpgrade={() => setIsUpgradeModalOpen(false)}
+        onCancel={() => setIsUpgradeModalOpen(false)}
+      />
     </AppErrorBoundary>
   );
 }

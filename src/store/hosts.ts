@@ -40,13 +40,16 @@ const createHostSlice: StateCreator<IHostSlice, [], [], IHostSlice> = (set) => (
           name: host.name,
           version: host.version,
           endpointip: host.endpointip,
+          endpointipv6: host.endpointipv6,
+          isstaticendpoint: host.isstatic,
           os: host.os,
           publickey: host.publickey,
           listenport: host.listenport,
-          isstatic: host.isstatic,
+          isstaticport: host.isstaticport,
           mtu: host.mtu,
           interfaces: host.interfaces ?? [],
           macaddress: host.macaddress,
+          firewallinuse: host.firewallinuse,
         };
       });
       set(() => ({ hosts: hosts, hostsCommonDetails: commonDetails, isFetchingHosts: false }));

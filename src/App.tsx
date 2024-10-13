@@ -5,13 +5,14 @@ import { BrowserStore, useStore } from './store/store';
 import './App.scss';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AxiosError } from 'axios';
-import { ServerConfigService } from './services/ServerConfigService';
+import { ServerConfigService, getUiVersion } from './services/ServerConfigService';
 import ServerMalfunctionModal from './components/modals/server-malfunction-modal/ServerMalfunctionModal';
-import { useBranding } from './utils/Utils';
+import { useBranding, useServerLicense } from './utils/Utils';
 import { isSaasBuild } from './services/BaseService';
 import { APP_UPDATE_POLL_INTERVAL } from './constants/AppConstants';
 import { useIntercom } from 'react-use-intercom';
 import { reloadNmuiWithVersion } from './utils/RouteUtils';
+import { usePostHog } from 'posthog-js/react';
 
 function App() {
   const store = useStore();
@@ -20,9 +21,10 @@ function App() {
     shutdown: intercomShutdown,
     // startTour: intercomStartTour
   } = useIntercom();
+  const posthog = usePostHog();
 
   const branding = useBranding();
-  const isServerEE = store.serverConfig?.IsEE === 'yes';
+  const { isServerEE } = useServerLicense();
   const storeFetchServerConfig = store.fetchServerConfig;
   const storeSetServerStatus = store.setServerStatus;
   const storeFetchNodes = store.fetchNodes;
@@ -31,6 +33,7 @@ function App() {
 
   const [hasFetchedServerConfig, setHasFetchedServerConfig] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
+  const [showServerMalfunctionModal, setShowServerMalfunctionModal] = useState(false);
 
   const isIntercomReady = useMemo(() => {
     // TODO: add other params like tenant/server and user data loaded
@@ -55,6 +58,8 @@ function App() {
             license_error: store.serverStatus?.status?.license_error || '',
             healthyNetwork: true,
             is_pro: store.serverStatus?.status?.is_pro ?? false,
+            trial_end_date: store.serverStatus?.status?.trial_end_date ?? '',
+            is_on_trial_license: store.serverStatus?.status?.is_on_trial_license ?? false,
           });
         } else if (err.request) {
           // request was made but no response was received
@@ -64,6 +69,8 @@ function App() {
             license_error: store.serverStatus?.status?.license_error || '',
             healthyNetwork: false,
             is_pro: store.serverStatus?.status?.is_pro ?? false,
+            trial_end_date: store.serverStatus?.status?.trial_end_date ?? '',
+            is_on_trial_license: store.serverStatus?.status?.is_on_trial_license ?? false,
           });
         } else {
           // something bad happened when the request was being made
@@ -73,6 +80,8 @@ function App() {
             license_error: store.serverStatus?.status?.license_error || '',
             healthyNetwork: false,
             is_pro: store.serverStatus?.status?.is_pro ?? false,
+            trial_end_date: store.serverStatus?.status?.trial_end_date ?? '',
+            is_on_trial_license: store.serverStatus?.status?.is_on_trial_license ?? false,
           });
         }
       } else {
@@ -82,6 +91,8 @@ function App() {
           license_error: '',
           healthyNetwork: false,
           is_pro: store.serverStatus?.status?.is_pro ?? false,
+          trial_end_date: store.serverStatus?.status?.trial_end_date ?? '',
+          is_on_trial_license: store.serverStatus?.status?.is_on_trial_license ?? false,
         });
       }
     }
@@ -90,6 +101,8 @@ function App() {
     store.serverStatus?.status?.db_connected,
     store.serverStatus?.status?.license_error,
     store.serverStatus?.status?.is_pro,
+    store.serverStatus?.status?.trial_end_date,
+    store.serverStatus?.status?.is_on_trial_license,
     storeFetchHosts,
     storeFetchNodes,
     storeIsLoggedIn,
@@ -107,7 +120,9 @@ function App() {
 
           if (isSaasBuild && !BrowserStore.hasNmuiVersionSynced()) {
             BrowserStore.syncNmuiVersion();
-            reloadNmuiWithVersion(serverConfig?.Version ?? '');
+            if (serverConfig?.Version.toLocaleLowerCase() !== getUiVersion()) {
+              reloadNmuiWithVersion(serverConfig?.Version ?? '');
+            }
           }
         }
       }
@@ -135,6 +150,12 @@ function App() {
     };
   }, [intercomBoot, intercomShutdown, isIntercomReady, isServerEE, store.amuiUserId, store.tenantId, store.username]);
 
+  useEffect(() => {
+    if (isSaasBuild && store.isLoggedIn()) {
+      posthog.identify(store.amuiUserId, { email: store.username });
+    }
+  }, [posthog, store]);
+
   useEffect(
     () => {
       // set server status to healthy initially
@@ -144,6 +165,8 @@ function App() {
         license_error: '',
         healthyNetwork: true,
         is_pro: store.serverStatus?.status?.is_pro ?? false,
+        trial_end_date: store.serverStatus?.status?.trial_end_date ?? '',
+        is_on_trial_license: store.serverStatus?.status?.is_on_trial_license ?? false,
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,6 +194,23 @@ function App() {
     }
   }, [isAppReady]);
 
+  useEffect(() => {
+    let timerId: NodeJS.Timeout;
+    if (!store.serverStatus.isHealthy) {
+      timerId = setTimeout(() => {
+        setShowServerMalfunctionModal(true);
+      }, 5000); // 5000 milliseconds = 5 seconds
+    } else {
+      setShowServerMalfunctionModal(false);
+    }
+
+    return () => {
+      if (timerId) {
+        clearTimeout(timerId); // Clear the timeout if the component is unmounted before the timeout finishes
+      }
+    };
+  }, [store.serverStatus.isHealthy]);
+
   return (
     <div className="App">
       <ConfigProvider
@@ -188,7 +228,7 @@ function App() {
         <RouterProvider router={router} />
       </ConfigProvider>
 
-      <ServerMalfunctionModal isOpen={!store.serverStatus.isHealthy} />
+      <ServerMalfunctionModal isOpen={showServerMalfunctionModal} />
     </div>
   );
 }

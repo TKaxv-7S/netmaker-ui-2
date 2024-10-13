@@ -1,13 +1,13 @@
 import { Network } from '@/models/Network';
-import { useStore } from '@/store/store';
 import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Col, Divider, Form, Input, Modal, notification, Row, Table, TableColumnsType, Typography } from 'antd';
+import { Button, Col, Input, Modal, notification, Row, Table, TableColumnsType, Tooltip, Typography } from 'antd';
 import { User } from '@/models/User';
 import { Node } from '@/models/Node';
 import { UsersService } from '@/services/UsersService';
-import { NodesService } from '@/services/NodesService';
 import { extractErrorMsg } from '@/utils/ServiceUtils';
 import { SearchOutlined } from '@ant-design/icons';
+import AddUserModal from '../add-user-modal/AddUserModal';
+import { useServerLicense } from '@/utils/Utils';
 
 interface UpdateIngressUsersModalProps {
   isOpen: boolean;
@@ -15,30 +15,31 @@ interface UpdateIngressUsersModalProps {
   ingress: Node;
   onOk?: (e: MouseEvent<HTMLButtonElement>) => void;
   onCancel?: (e: MouseEvent<HTMLButtonElement>) => void;
+  remoteAccessManageUsersRef?: React.RefObject<HTMLDivElement>;
 }
 
 export default function UpdateIngressUsersModal({
   isOpen,
-  networkId,
   ingress,
   onCancel,
+  remoteAccessManageUsersRef,
 }: UpdateIngressUsersModalProps) {
   const [notify, notifyCtx] = notification.useNotification();
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [usersSearch, setUsersSearch] = useState<string>('');
-  const store = useStore();
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [ingressUsers, setIngressUsers] = useState<User[]>([]);
-  const isServerEE = store.serverConfig?.IsEE === 'yes';
+  const { isServerEE } = useServerLicense();
 
   const loadUsers = useCallback(async () => {
     try {
       setIsUsersLoading(true);
       const users = (await UsersService.getUsers()).data;
-      const usersAttachedToIngress = (await UsersService.getIngressUsers(ingress.id)).data.users;
+      const usersAttachedToIngress = (await UsersService.getIngressUsers(ingress.id)).data.users ?? [];
       // remove admins and the superadmin from the list
-      const filteredUsers = users.filter((user) => !user.isadmin && !user.issuperadmin);
-      setUsers(filteredUsers);
+      // const filteredUsers = users.filter((user) => !user.isadmin && !user.issuperadmin);
+      setUsers(users);
       setIngressUsers(usersAttachedToIngress);
     } catch (err) {
       notify.error({
@@ -101,7 +102,20 @@ export default function UpdateIngressUsersModal({
         title: 'Actions',
         render(_, user) {
           return (
-            <Typography.Link onClick={(_) => confirmAttachOrRemoveUser(user)}>{getLinkText(user)}</Typography.Link>
+            <Tooltip
+              title={
+                user.isadmin || user.issuperadmin
+                  ? 'Admins can access the gateway directly without needing to detach or attach permissions.'
+                  : ''
+              }
+            >
+              <Typography.Link
+                onClick={() => confirmAttachOrRemoveUser(user)}
+                disabled={user.isadmin || user.issuperadmin}
+              >
+                {getLinkText(user)}
+              </Typography.Link>
+            </Tooltip>
           );
         },
       },
@@ -141,17 +155,35 @@ export default function UpdateIngressUsersModal({
             style={{ marginBottom: '1rem' }}
           />
         </Col>
+        <Col xs={24} md={16} style={{ display: 'flex', justifyContent: 'end' }}>
+          <Button className="full-width-button-xs" type="primary" onClick={() => setIsAddUserModalOpen(true)}>
+            Add User
+          </Button>
+        </Col>
         <Col xs={24}>
-          <Table
-            columns={usersTableColumns}
-            dataSource={filteredUsers}
-            rowKey="username"
-            loading={isUsersLoading}
-            size="small"
-          />
+          <div className="table-wrapper">
+            <Table
+              columns={usersTableColumns}
+              dataSource={filteredUsers}
+              rowKey="username"
+              loading={isUsersLoading}
+              size="small"
+              ref={remoteAccessManageUsersRef}
+            />
+          </div>
         </Col>
       </Row>
       {notifyCtx}
+      <AddUserModal
+        isOpen={isAddUserModalOpen}
+        onCreateUser={(user) => {
+          setUsers([...users, user]);
+          setIsAddUserModalOpen(false);
+        }}
+        onCancel={() => {
+          setIsAddUserModalOpen(false);
+        }}
+      />
     </Modal>
   );
 }

@@ -37,7 +37,6 @@ const testNode1: Node = {
   dnson: false,
   islocal: false,
   server: '',
-  internetgateway: '',
   defaultacl: '',
   connected: false,
   failover: false,
@@ -46,6 +45,15 @@ const testNode1: Node = {
   autoupdate: false,
   isrelay: false,
   isrelayed: false,
+  isinternetgateway: false,
+  is_fail_over: false,
+  failed_over_by: '',
+  fail_over_peers: [],
+  internetgw_node_id: '',
+  inet_node_req: {
+    inet_node_client_ids: [],
+  },
+  additional_rag_ips: [],
 };
 
 const testNode2 = { ...testNode1, lastcheckin: testNode1.lastcheckin - 400 };
@@ -59,12 +67,14 @@ const testHost1: Host = {
   os: '',
   debug: false,
   isstatic: false,
+  isstaticport: false,
   listenport: 0,
   localrange: '',
   mtu: 0,
   interfaces: [],
   defaultinterface: '',
   endpointip: '',
+  endpointipv6: '',
   publickey: '',
   macaddress: '',
   nodes: [],
